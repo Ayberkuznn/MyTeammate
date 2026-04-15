@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
@@ -17,6 +19,10 @@ class _RegisterPageState extends State<RegisterPage> {
 
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
+  bool _isLoading = false;
+
+  // Android emülatör için 10.0.2.2, gerçek cihaz için sunucunun IP'si
+  static const String _baseUrl = 'http://10.0.2.2:3000';
 
   DateTime? _selectedDate;
   String? _selectedCity;
@@ -124,6 +130,32 @@ class _RegisterPageState extends State<RegisterPage> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    _nameController.addListener(_onFieldChanged);
+    _surnameController.addListener(_onFieldChanged);
+    _emailController.addListener(_onFieldChanged);
+    _phoneController.addListener(_onFieldChanged);
+    _passwordController.addListener(_onFieldChanged);
+    _confirmPasswordController.addListener(_onFieldChanged);
+  }
+
+  void _onFieldChanged() => setState(() {});
+
+  bool get _isFormValid =>
+      _nameController.text.trim().isNotEmpty &&
+      _surnameController.text.trim().isNotEmpty &&
+      _emailController.text.trim().isNotEmpty &&
+      _phoneController.text.trim().isNotEmpty &&
+      _passwordController.text.isNotEmpty &&
+      _confirmPasswordController.text.isNotEmpty &&
+      _selectedDate != null &&
+      _selectedCity != null &&
+      _selectedDistrict != null &&
+      _selectedPosition != null &&
+      _selectedFoot != null;
+
+  @override
   void dispose() {
     _nameController.dispose();
     _surnameController.dispose();
@@ -132,6 +164,67 @@ class _RegisterPageState extends State<RegisterPage> {
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     super.dispose();
+  }
+
+  Future<void> _register() async {
+    if (_selectedDate == null || _selectedCity == null ||
+        _selectedDistrict == null || _selectedPosition == null ||
+        _selectedFoot == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Lütfen tüm alanları doldurun.')),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/api/auth/register'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'Name': _nameController.text.trim(),
+          'Surname': _surnameController.text.trim(),
+          'Email': _emailController.text.trim(),
+          'Password': _passwordController.text,
+          'confirmPassword': _confirmPasswordController.text,
+          'Phone_number': _phoneController.text.trim(),
+          'Birthday':
+              '${_selectedDate!.year}-${_selectedDate!.month.toString().padLeft(2, '0')}-${_selectedDate!.day.toString().padLeft(2, '0')}',
+          'City': _selectedCity,
+          'District': _selectedDistrict,
+          'Position': _selectedPosition,
+          'Foot': _selectedFoot,
+        }),
+      );
+
+      final body = jsonDecode(response.body);
+
+      if (!mounted) return;
+
+      if (response.statusCode == 201) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Kayıt başarılı!')),
+        );
+        Navigator.pop(context);
+      } else if (response.statusCode == 400) {
+        final errors = (body['errors'] as List).join('\n');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(errors)),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(body['error'] ?? 'Bir hata oluştu.')),
+        );
+      }
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Sunucuya bağlanılamadı.')),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   Future<void> _pickDate() async {
@@ -335,7 +428,7 @@ class _RegisterPageState extends State<RegisterPage> {
                       Align(
                         alignment: Alignment.centerRight,
                         child: ElevatedButton(
-                          onPressed: () {},
+                          onPressed: _isLoading || !_isFormValid ? null : _register,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF2E2E2E),
                             foregroundColor: Colors.white,
@@ -348,10 +441,19 @@ class _RegisterPageState extends State<RegisterPage> {
                             ),
                             elevation: 0,
                           ),
-                          child: const Text(
-                            'Kayıt Ol',
-                            style: TextStyle(fontSize: 14),
-                          ),
+                          child: _isLoading
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    color: Colors.white,
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Text(
+                                  'Kayıt Ol',
+                                  style: TextStyle(fontSize: 14),
+                                ),
                         ),
                       ),
 
