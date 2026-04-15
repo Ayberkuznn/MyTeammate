@@ -78,8 +78,11 @@ function validateRegisterInput({ Name, Surname, Email, Password, confirmPassword
 app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
 });
+app.get('/api', (req, res) => {
+  res.json({ message: 'MyTeammate API' });
+});
 
-// POST /api/auth/register
+// register apisi
 app.post('/api/auth/register', async (req, res) => {
   const {
     Name, Surname, Email, Password, confirmPassword,
@@ -135,6 +138,11 @@ app.post('/api/auth/register', async (req, res) => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+  });
+}
+
+// TESTLER İÇİN EN ÖNEMLİ KISIM BURASI:
+module.exports = app;
