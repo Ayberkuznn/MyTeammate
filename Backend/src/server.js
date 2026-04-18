@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const { Pool } = require('pg');
 const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -21,6 +22,17 @@ pool.query('SELECT 1')
 
 // Middleware
 app.use(express.json());
+
+// ─── JWT Yardımcıları ─────────────────────────────────────────────────────────
+
+const ACCESS_SECRET  = process.env.JWT_ACCESS_SECRET;
+const REFRESH_SECRET = process.env.JWT_REFRESH_SECRET;
+
+function generateTokens(payload) {
+  const accessToken  = jwt.sign(payload, ACCESS_SECRET,  { expiresIn: '15m' });
+  const refreshToken = jwt.sign(payload, REFRESH_SECRET, { expiresIn: '7d' });
+  return { accessToken, refreshToken };
+}
 
 // ─── Sabit Listeler ───────────────────────────────────────────────────────────
 
@@ -132,6 +144,46 @@ app.post('/api/auth/register', async (req, res) => {
   } catch (err) {
     // DB hatası detayı kullanıcıya sızdırılmaz
     console.error('Register error:', err);
+    return res.status(500).json({ error: 'Sunucu hatası. Lütfen tekrar deneyin.' });
+  }
+});
+
+// POST /api/auth/login
+app.post('/api/auth/login', async (req, res) => {
+  const { Email, Password } = req.body;
+
+  if (!Email?.trim() || !Password) {
+    return res.status(400).json({ error: 'E-posta ve şifre zorunludur.' });
+  }
+
+  try {
+    const result = await pool.query(
+      'SELECT user_id, "Name", "Surname", "Email", "Password" FROM "User" WHERE "Email" = $1 LIMIT 1',
+      [Email.trim().toLowerCase()]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(401).json({ error: 'E-posta veya şifre hatalı.' });
+    }
+
+    const user = result.rows[0];
+    const passwordMatch = await bcrypt.compare(Password, user.Password);
+
+    if (!passwordMatch) {
+      return res.status(401).json({ error: 'E-posta veya şifre hatalı.' });
+    }
+
+    const payload = { userId: user.user_id, email: user.Email };
+    const { accessToken, refreshToken } = generateTokens(payload);
+
+    return res.status(200).json({
+      accessToken,
+      refreshToken,
+      user: { userId: user.user_id, name: user.Name, surname: user.Surname, email: user.Email },
+    });
+
+  } catch (err) {
+    console.error('Login error:', err);
     return res.status(500).json({ error: 'Sunucu hatası. Lütfen tekrar deneyin.' });
   }
 });
