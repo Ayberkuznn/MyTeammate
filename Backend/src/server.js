@@ -3,6 +3,7 @@ const express = require('express');
 const { Pool } = require('pg');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const nodemailer = require('nodemailer');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -22,6 +23,32 @@ pool.query('SELECT 1')
 
 // Middleware
 app.use(express.json());
+
+// ─── Mailer ───────────────────────────────────────────────────────────────────
+
+const transporter = nodemailer.createTransport({
+  host:   process.env.SMTP_HOST,
+  port:   Number(process.env.SMTP_PORT) || 587,
+  secure: process.env.SMTP_PORT === '465',
+  auth: {
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS,
+  },
+});
+
+async function sendOtpEmail(to, code) {
+  await transporter.sendMail({
+    from: `"Takım Arkadaşım" <${process.env.SMTP_USER}>`,
+    to,
+    subject: 'E-posta Doğrulama Kodunuz',
+    text: `Doğrulama kodunuz: ${code}\n\nBu kod 10 dakika geçerlidir.`,
+    html: `<p>Doğrulama kodunuz: <strong style="font-size:24px">${code}</strong></p><p>Bu kod 10 dakika geçerlidir.</p>`,
+  });
+}
+
+function generateOtp() {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+}
 
 // ─── JWT Yardımcıları ─────────────────────────────────────────────────────────
 
@@ -135,15 +162,88 @@ app.post('/api/auth/register', async (req, res) => {
       ]
     );
 
-    // 5. Yanıtta şifre hash'i veya hassas alan döndürülmez
+    const newUser = result.rows[0];
+
+    // 5. OTP üret ve Validation tablosuna kaydet
+    const otp = generateOtp();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 dakika
+
+    await pool.query(
+      'DELETE FROM "Validation" WHERE user_id = $1',
+      [newUser.user_id]
+    );
+    await pool.query(
+      `INSERT INTO "Validation" (user_id, code, expires_at, is_used)
+       VALUES ($1, $2, $3, false)`,
+      [newUser.user_id, otp, expiresAt]
+    );
+
+    // 6. E-posta gönder (başarısız olsa da kayıt tamamdır)
+    let emailSent = true;
+    try {
+      await sendOtpEmail(cleanEmail, otp);
+    } catch (mailErr) {
+      console.error('OTP email error:', mailErr.message);
+      emailSent = false;
+    }
+
     return res.status(201).json({
       message: 'Kayıt başarılı.',
-      user: result.rows[0],
+      emailSent,
+      user: newUser,
     });
 
   } catch (err) {
     // DB hatası detayı kullanıcıya sızdırılmaz
     console.error('Register error:', err);
+    return res.status(500).json({ error: 'Sunucu hatası. Lütfen tekrar deneyin.' });
+  }
+});
+
+// POST /api/auth/verify-email
+app.post('/api/auth/verify-email', async (req, res) => {
+  const { email, code } = req.body;
+
+  if (!email?.trim() || !code?.trim()) {
+    return res.status(400).json({ error: 'E-posta ve kod zorunludur.' });
+  }
+
+  try {
+    const userResult = await pool.query(
+      'SELECT user_id FROM "User" WHERE "Email" = $1 LIMIT 1',
+      [email.trim().toLowerCase()]
+    );
+
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
+    }
+
+    const userId = userResult.rows[0].user_id;
+
+    const validation = await pool.query(
+      `SELECT * FROM "Validation"
+       WHERE user_id = $1 AND code = $2 AND is_used = false AND expires_at > NOW()
+       LIMIT 1`,
+      [userId, code.trim()]
+    );
+
+    if (validation.rows.length === 0) {
+      return res.status(400).json({ error: 'Kod hatalı veya süresi dolmuş.' });
+    }
+
+    await pool.query(
+      'UPDATE "User" SET is_verified = true WHERE user_id = $1',
+      [userId]
+    );
+    await pool.query(
+      'UPDATE "Validation" SET is_used = true WHERE user_id = $1',
+      [userId]
+    );
+
+    return res.status(200).json({ message: 'E-posta doğrulandı.' });
+
+  } catch (err) {
+    console.error('Verify email error:', err);
     return res.status(500).json({ error: 'Sunucu hatası. Lütfen tekrar deneyin.' });
   }
 });
