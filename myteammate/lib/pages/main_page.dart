@@ -25,7 +25,9 @@ class _MainPageState extends State<MainPage> {
   }
 
   Future<void> _logout() async {
-    await _storage.deleteAll();
+    await _storage.delete(key: 'user_email');
+    await _storage.delete(key: 'access_token');
+    await _storage.delete(key: 'refresh_token');
     if (!mounted) return;
     Navigator.pushReplacement(
       context,
@@ -53,7 +55,10 @@ class _MainPageState extends State<MainPage> {
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(20),
                 ),
-                padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 28,
+                  vertical: 10,
+                ),
                 elevation: 0,
               ),
               child: const Text('Çıkış Yap'),

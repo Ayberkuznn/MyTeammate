@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'verification_page.dart';
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
@@ -203,10 +204,12 @@ class _RegisterPageState extends State<RegisterPage> {
       if (!mounted) return;
 
       if (response.statusCode == 201) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Kayıt başarılı!')),
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => VerificationPage(email: _emailController.text.trim()),
+          ),
         );
-        Navigator.pop(context);
       } else if (response.statusCode == 400) {
         final errors = (body['errors'] as List).join('\n');
         ScaffoldMessenger.of(context).showSnackBar(
