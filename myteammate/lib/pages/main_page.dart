@@ -15,7 +15,6 @@ class _MainPageState extends State<MainPage> {
   String? _email;
   String? _name;
   String? _surname;
-  String? _id;
   int _navIndex = 0;
 
   @override
@@ -28,14 +27,12 @@ class _MainPageState extends State<MainPage> {
     final email = await _storage.read(key: 'user_email');
     final name = await _storage.read(key: 'user_name');
     final surname = await _storage.read(key: 'user_surname');
-    final id = await _storage.read(key: 'user_id');
 
     if (mounted) {
       setState(() {
         _email = email;
         _name = name;
         _surname = surname;
-        _id = id;
       });
     }
   }
