@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'login_page.dart';
+import '../widgets/app_navbar.dart';
 
 class MainPage extends StatefulWidget {
   const MainPage({super.key});
@@ -12,6 +13,10 @@ class MainPage extends StatefulWidget {
 class _MainPageState extends State<MainPage> {
   static const _storage = FlutterSecureStorage();
   String? _email;
+  String? _name;
+  String? _surname;
+  String? _id;
+  int _navIndex = 0;
 
   @override
   void initState() {
@@ -21,7 +26,18 @@ class _MainPageState extends State<MainPage> {
 
   Future<void> _loadEmail() async {
     final email = await _storage.read(key: 'user_email');
-    if (mounted) setState(() => _email = email);
+    final name = await _storage.read(key: 'user_name');
+    final surname = await _storage.read(key: 'user_surname');
+    final id = await _storage.read(key: 'user_id');
+
+    if (mounted) {
+      setState(() {
+        _email = email;
+        _name = name;
+        _surname = surname;
+        _id = id;
+      });
+    }
   }
 
   Future<void> _logout() async {
@@ -46,6 +62,15 @@ class _MainPageState extends State<MainPage> {
               _email ?? '',
               style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
             ),
+            Text(
+              _name ?? '',
+              style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
+            ),
+            Text(
+              _surname ?? '',
+              style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
+            ),
+
             const SizedBox(height: 24),
             ElevatedButton(
               onPressed: _logout,
@@ -65,6 +90,10 @@ class _MainPageState extends State<MainPage> {
             ),
           ],
         ),
+      ),
+      bottomNavigationBar: AppNavBar(
+        currentIndex: _navIndex,
+        onTap: (i) => setState(() => _navIndex = i),
       ),
     );
   }

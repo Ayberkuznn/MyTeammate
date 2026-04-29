@@ -53,9 +53,18 @@ class _LoginPageState extends State<LoginPage> {
       if (!mounted) return;
 
       if (response.statusCode == 200) {
-        await _storage.write(key: 'access_token',  value: body['accessToken']);
+        await _storage.write(key: 'access_token', value: body['accessToken']);
         await _storage.write(key: 'refresh_token', value: body['refreshToken']);
-        await _storage.write(key: 'user_email',    value: body['user']['email']);
+        await _storage.write(key: 'user_email', value: body['user']['email']);
+        await _storage.write(key: 'user_name', value: body['user']['name']);
+        await _storage.write(
+          key: 'user_id',
+          value: body['user']['id'].toString(),
+        );
+        await _storage.write(
+          key: 'user_surname',
+          value: body['user']['surname'],
+        );
 
         if (!mounted) return;
         Navigator.pushReplacement(
