@@ -1,7 +1,6 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'login_page.dart';
+import '../services/auth_service.dart';
 
 class VerificationPage extends StatefulWidget {
   final String email;
@@ -12,8 +11,6 @@ class VerificationPage extends StatefulWidget {
 }
 
 class _VerificationPageState extends State<VerificationPage> {
-  static const String _baseUrl = 'http://10.0.2.2:3000';
-
   final List<TextEditingController> _controllers =
       List.generate(6, (_) => TextEditingController());
   final List<FocusNode> _focusNodes = List.generate(6, (_) => FocusNode());
@@ -35,16 +32,10 @@ class _VerificationPageState extends State<VerificationPage> {
     setState(() => _isLoading = true);
 
     try {
-      final response = await http.post(
-        Uri.parse('$_baseUrl/api/auth/verify-email'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'email': widget.email, 'code': _code}),
-      );
-
-      final body = jsonDecode(response.body);
+      final result = await AuthService.verifyEmail(widget.email, _code);
       if (!mounted) return;
 
-      if (response.statusCode == 200) {
+      if (result.success) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('E-posta doğrulandı! Giriş yapabilirsiniz.')),
         );
@@ -55,7 +46,7 @@ class _VerificationPageState extends State<VerificationPage> {
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(body['error'] ?? 'Doğrulama başarısız.')),
+          SnackBar(content: Text(result.error ?? 'Doğrulama başarısız.')),
         );
       }
     } catch (_) {

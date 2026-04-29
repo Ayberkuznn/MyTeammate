@@ -1,9 +1,7 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'register_page.dart';
 import 'main_page.dart';
+import '../services/auth_service.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -17,9 +15,6 @@ class _LoginPageState extends State<LoginPage> {
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
   bool _isLoading = false;
-
-  static const String _baseUrl = 'http://10.0.2.2:3000';
-  static const _storage = FlutterSecureStorage();
 
   @override
   void dispose() {
@@ -42,45 +37,24 @@ class _LoginPageState extends State<LoginPage> {
     setState(() => _isLoading = true);
 
     try {
-      final response = await http.post(
-        Uri.parse('$_baseUrl/api/auth/login'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'Email': email, 'Password': password}),
-      );
-
-      final body = jsonDecode(response.body);
-
+      final result = await AuthService.login(email, password);
       if (!mounted) return;
 
-      if (response.statusCode == 200) {
-        await _storage.write(key: 'access_token', value: body['accessToken']);
-        await _storage.write(key: 'refresh_token', value: body['refreshToken']);
-        await _storage.write(key: 'user_email', value: body['user']['email']);
-        await _storage.write(key: 'user_name', value: body['user']['name']);
-        await _storage.write(
-          key: 'user_id',
-          value: body['user']['id'].toString(),
-        );
-        await _storage.write(
-          key: 'user_surname',
-          value: body['user']['surname'],
-        );
-
-        if (!mounted) return;
+      if (result.success) {
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (context) => const MainPage()),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(body['error'] ?? 'Giriş başarısız.')),
+          SnackBar(content: Text(result.error ?? 'Giriş başarısız.')),
         );
       }
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Sunucuya bağlanılamadı.')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Sunucuya bağlanılamadı.')),
+      );
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }

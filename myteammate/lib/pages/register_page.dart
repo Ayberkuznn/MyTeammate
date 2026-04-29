@@ -1,7 +1,6 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'verification_page.dart';
+import '../services/auth_service.dart';
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
@@ -21,9 +20,6 @@ class _RegisterPageState extends State<RegisterPage> {
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
   bool _isLoading = false;
-
-  // Android emülatör için 10.0.2.2, gerçek cihaz için sunucunun IP'si
-  static const String _baseUrl = 'http://10.0.2.2:3000';
 
   DateTime? _selectedDate;
   String? _selectedCity;
@@ -180,44 +176,33 @@ class _RegisterPageState extends State<RegisterPage> {
     setState(() => _isLoading = true);
 
     try {
-      final response = await http.post(
-        Uri.parse('$_baseUrl/api/auth/register'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'Name': _nameController.text.trim(),
-          'Surname': _surnameController.text.trim(),
-          'Email': _emailController.text.trim(),
-          'Password': _passwordController.text,
-          'confirmPassword': _confirmPasswordController.text,
-          'Phone_number': _phoneController.text.trim(),
-          'Birthday':
-              '${_selectedDate!.year}-${_selectedDate!.month.toString().padLeft(2, '0')}-${_selectedDate!.day.toString().padLeft(2, '0')}',
-          'City': _selectedCity,
-          'District': _selectedDistrict,
-          'Position': _selectedPosition,
-          'Foot': _selectedFoot,
-        }),
-      );
-
-      final body = jsonDecode(response.body);
+      final result = await AuthService.register({
+        'Name': _nameController.text.trim(),
+        'Surname': _surnameController.text.trim(),
+        'Email': _emailController.text.trim(),
+        'Password': _passwordController.text,
+        'confirmPassword': _confirmPasswordController.text,
+        'Phone_number': _phoneController.text.trim(),
+        'Birthday':
+            '${_selectedDate!.year}-${_selectedDate!.month.toString().padLeft(2, '0')}-${_selectedDate!.day.toString().padLeft(2, '0')}',
+        'City': _selectedCity,
+        'District': _selectedDistrict,
+        'Position': _selectedPosition,
+        'Foot': _selectedFoot,
+      });
 
       if (!mounted) return;
 
-      if (response.statusCode == 201) {
+      if (result.success) {
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
             builder: (_) => VerificationPage(email: _emailController.text.trim()),
           ),
         );
-      } else if (response.statusCode == 400) {
-        final errors = (body['errors'] as List).join('\n');
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(errors)),
-        );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(body['error'] ?? 'Bir hata oluştu.')),
+          SnackBar(content: Text(result.error ?? 'Bir hata oluştu.')),
         );
       }
     } catch (_) {

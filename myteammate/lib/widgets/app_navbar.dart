@@ -62,7 +62,10 @@ class AppNavBar extends StatelessWidget {
                     currentIndex: currentIndex,
                     onTap: onTap,
                   ),
-                  _CenterButton(isActive: currentIndex == 2, onTap: () => onTap(2)),
+                  _CenterButton(
+                    isActive: currentIndex == 2,
+                    onTap: () => onTap(2),
+                  ),
                   _NavItem(
                     icon: Icons.notifications_outlined,
                     activeIcon: Icons.notifications,
