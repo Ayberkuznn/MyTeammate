@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'login_page.dart';
+import 'profile_page.dart';
 import '../widgets/app_navbar.dart';
 
 class MainPage extends StatefulWidget {
@@ -51,42 +52,41 @@ class _MainPageState extends State<MainPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              _email ?? '',
-              style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
-            ),
-            Text(
-              _name ?? '',
-              style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
-            ),
-            Text(
-              _surname ?? '',
-              style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
-            ),
-
-            const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: _logout,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF2E2E2E),
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
+      body: IndexedStack(
+        index: _navIndex,
+        children: [
+          // 0 — Ana Sayfa
+          Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(_email ?? '', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+                Text(_name ?? '', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+                Text(_surname ?? '', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 24),
+                ElevatedButton(
+                  onPressed: _logout,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF2E2E2E),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 10),
+                    elevation: 0,
+                  ),
+                  child: const Text('Çıkış Yap'),
                 ),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 28,
-                  vertical: 10,
-                ),
-                elevation: 0,
-              ),
-              child: const Text('Çıkış Yap'),
+              ],
             ),
-          ],
-        ),
+          ),
+          // 1 — Arama
+          const Center(child: Text('Arama')),
+          // 2 — Menü
+          const Center(child: Text('Menü')),
+          // 3 — Bildirimler
+          const Center(child: Text('Bildirimler')),
+          // 4 — Profil
+          const ProfilePage(),
+        ],
       ),
       bottomNavigationBar: AppNavBar(
         currentIndex: _navIndex,
