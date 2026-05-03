@@ -9,4 +9,8 @@ function generateTokens(payload) {
   return { accessToken, refreshToken };
 }
 
-module.exports = { generateTokens };
+function verifyAccessToken(token) {
+  return jwt.verify(token, ACCESS_SECRET);
+}
+
+module.exports = { generateTokens, verifyAccessToken };
