@@ -3,11 +3,12 @@ const pool = require('../config/db');
 const { sendOtpEmail, generateOtp } = require('../utils/mailer');
 const { generateTokens } = require('../utils/jwt');
 
-const ALLOWED_POSITIONS = ['Kaleci', 'Defans', 'Orta Saha', 'Forvet'];
-const ALLOWED_FEET      = ['Sağ', 'Sol', 'Her İkisi'];
+const ALLOWED_POSITIONS   = ['Kaleci', 'Defans', 'Orta Saha', 'Forvet'];
+const ALLOWED_FEET        = ['Sağ', 'Sol', 'Her İkisi'];
+const ALLOWED_SKILL_LEVELS = ['Başlangıç', 'Orta Seviye', 'İleri Seviye'];
 
 function validateRegisterInput({ Name, Surname, Email, Password, confirmPassword,
-  Phone_number, Birthday, City, District, Position, Foot }) {
+  Phone_number, Birthday, City, District, Position, Foot, Skill_level }) {
 
   const errors = [];
 
@@ -39,8 +40,9 @@ function validateRegisterInput({ Name, Surname, Email, Password, confirmPassword
 
   if (Password !== confirmPassword) errors.push('Şifreler eşleşmiyor.');
 
-  if (!Position || !ALLOWED_POSITIONS.includes(Position)) errors.push('Geçersiz pozisyon.');
-  if (!Foot     || !ALLOWED_FEET.includes(Foot))          errors.push('Geçersiz ayak tercihi.');
+  if (!Position    || !ALLOWED_POSITIONS.includes(Position))       errors.push('Geçersiz pozisyon.');
+  if (!Foot        || !ALLOWED_FEET.includes(Foot))                errors.push('Geçersiz ayak tercihi.');
+  if (!Skill_level || !ALLOWED_SKILL_LEVELS.includes(Skill_level)) errors.push('Geçersiz yetenek seviyesi.');
 
   return errors;
 }
@@ -63,12 +65,12 @@ async function register(data) {
   const hashedPassword = await bcrypt.hash(data.Password, 12);
 
   const result = await pool.query(
-    `INSERT INTO "User" ("Name","Surname","Email","Password","Phone_number","Birthday","City","District","Position","Foot")
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+    `INSERT INTO "User" ("Name","Surname","Email","Password","Phone_number","Birthday","City","District","Position","Foot","Skill_level")
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
      RETURNING user_id, "Name", "Surname", "Email"`,
     [
       data.Name.trim(), data.Surname.trim(), cleanEmail, hashedPassword,
-      cleanPhone, data.Birthday, data.City.trim(), data.District.trim(), data.Position, data.Foot,
+      cleanPhone, data.Birthday, data.City.trim(), data.District.trim(), data.Position, data.Foot, data.Skill_level,
     ]
   );
 
