@@ -26,10 +26,11 @@ class _RegisterPageState extends State<RegisterPage> {
   String? _selectedDistrict;
   String? _selectedPosition;
   String? _selectedFoot;
+  String? _selectedSkillLevel;
 
-  final List<String> _positions = ['Kaleci', 'Defans', 'Orta Saha', 'Forvet'];
-
-  final List<String> _feet = ['Sağ', 'Sol', 'Her İkisi'];
+  final List<String> _positions   = ['Kaleci', 'Defans', 'Orta Saha', 'Forvet'];
+  final List<String> _feet        = ['Sağ', 'Sol', 'Her İkisi'];
+  final List<String> _skillLevels = ['Başlangıç', 'Orta Seviye', 'İleri Seviye'];
 
   final List<String> _cities = [
     'Adana',
@@ -150,7 +151,8 @@ class _RegisterPageState extends State<RegisterPage> {
       _selectedCity != null &&
       _selectedDistrict != null &&
       _selectedPosition != null &&
-      _selectedFoot != null;
+      _selectedFoot != null &&
+      _selectedSkillLevel != null;
 
   @override
   void dispose() {
@@ -166,7 +168,7 @@ class _RegisterPageState extends State<RegisterPage> {
   Future<void> _register() async {
     if (_selectedDate == null || _selectedCity == null ||
         _selectedDistrict == null || _selectedPosition == null ||
-        _selectedFoot == null) {
+        _selectedFoot == null || _selectedSkillLevel == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Lütfen tüm alanları doldurun.')),
       );
@@ -189,6 +191,7 @@ class _RegisterPageState extends State<RegisterPage> {
         'District': _selectedDistrict,
         'Position': _selectedPosition,
         'Foot': _selectedFoot,
+        'Skill_level': _selectedSkillLevel,
       });
 
       if (!mounted) return;
@@ -409,6 +412,15 @@ class _RegisterPageState extends State<RegisterPage> {
                         value: _selectedFoot,
                         items: _feet,
                         onChanged: (val) => setState(() => _selectedFoot = val),
+                      ),
+                      const SizedBox(height: 10),
+
+                      // Yetenek Seviyesi
+                      _buildDropdown(
+                        hint: 'Yetenek Seviyesi',
+                        value: _selectedSkillLevel,
+                        items: _skillLevels,
+                        onChanged: (val) => setState(() => _selectedSkillLevel = val),
                       ),
                       const SizedBox(height: 16),
 
