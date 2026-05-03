@@ -55,6 +55,24 @@ class AuthService {
     return AuthResult(success: false, error: body['error'] as String? ?? 'Bir hata oluştu.');
   }
 
+  static Future<Map<String, dynamic>?> getProfile() async {
+    final token = await _storage.read(key: 'access_token');
+    if (token == null) return null;
+
+    final response = await http.get(
+      Uri.parse('$_baseUrl/api/user/profile'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    }
+    return null;
+  }
+
   static Future<AuthResult> verifyEmail(String email, String code) async {
     final response = await http.post(
       Uri.parse('$_baseUrl/api/auth/verify-email'),

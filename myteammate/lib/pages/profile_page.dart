@@ -1,13 +1,75 @@
 import 'package:flutter/material.dart';
+import '../services/auth_service.dart';
 
-class ProfilePage extends StatelessWidget {
+class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
 
+  @override
+  State<ProfilePage> createState() => _ProfilePageState();
+}
+
+class _ProfilePageState extends State<ProfilePage> {
   static const double _bannerHeight = 200;
   static const double _avatarRadius = 44;
 
+  Map<String, dynamic>? _profile;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProfile();
+  }
+
+  Future<void> _loadProfile() async {
+    final data = await AuthService.getProfile();
+    if (mounted) {
+      setState(() {
+        _profile = data;
+        _isLoading = false;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(
+        backgroundColor: Color(0xFFEEEEEE),
+        body: Center(child: CircularProgressIndicator(color: Color(0xFF5A8A5A))),
+      );
+    }
+
+    if (_profile == null) {
+      return Scaffold(
+        backgroundColor: const Color(0xFFEEEEEE),
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Profil yüklenemedi.', style: TextStyle(fontSize: 16)),
+              const SizedBox(height: 12),
+              ElevatedButton(
+                onPressed: () {
+                  setState(() => _isLoading = true);
+                  _loadProfile();
+                },
+                child: const Text('Tekrar Dene'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final name        = '${_profile!['name']} ${_profile!['surname']}';
+    final position    = _profile!['position'] as String? ?? '';
+    final skillLevel  = _profile!['skillLevel'] as String? ?? '';
+    final foot        = _profile!['foot'] as String? ?? '';
+    final totalMatch  = (_profile!['totalMatch'] as num?)?.toInt() ?? 0;
+    final avgRating   = (_profile!['avgRating'] as num?)?.toDouble() ?? 0.0;
+    final penaltyScore = (_profile!['penaltyScore'] as num?)?.toInt() ?? 0;
+
     return Scaffold(
       backgroundColor: const Color(0xFFEEEEEE),
       body: SingleChildScrollView(
@@ -16,10 +78,17 @@ class ProfilePage extends StatelessWidget {
             Column(
               children: [
                 _buildBanner(),
-                _buildBody(),
+                _buildBody(
+                  name: name,
+                  position: position,
+                  skillLevel: skillLevel,
+                  foot: foot,
+                  totalMatch: totalMatch,
+                  avgRating: avgRating,
+                  penaltyScore: penaltyScore,
+                ),
               ],
             ),
-            // Avatar — saha ile kart sınırını ortalar
             Positioned(
               top: _bannerHeight - _avatarRadius,
               left: 0,
@@ -47,7 +116,15 @@ class ProfilePage extends StatelessWidget {
     );
   }
 
-  Widget _buildBody() {
+  Widget _buildBody({
+    required String name,
+    required String position,
+    required String skillLevel,
+    required String foot,
+    required int totalMatch,
+    required double avgRating,
+    required int penaltyScore,
+  }) {
     return Container(
       width: double.infinity,
       decoration: const BoxDecoration(
@@ -56,13 +133,11 @@ class ProfilePage extends StatelessWidget {
       ),
       child: Column(
         children: [
-          // Avatar için boşluk
           const SizedBox(height: _avatarRadius + 16),
 
-          // İsim
-          const Text(
-            'Arda Güler',
-            style: TextStyle(
+          Text(
+            name,
+            style: const TextStyle(
               fontSize: 26,
               fontWeight: FontWeight.bold,
               color: Color(0xFF1A1A1A),
@@ -71,35 +146,34 @@ class ProfilePage extends StatelessWidget {
 
           const SizedBox(height: 20),
 
-          // Mevki + Seviye
-          const Row(
+          Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              _Badge(label: 'Orta Saha', color: Color(0xFF4A7A4A)),
-              SizedBox(width: 12),
-              _Badge(label: 'Orta Seviye', color: Color(0xFF7A7A2A)),
+              _Badge(label: position, color: const Color(0xFF4A7A4A)),
+              const SizedBox(width: 12),
+              _Badge(label: skillLevel, color: const Color(0xFF7A7A2A)),
             ],
           ),
 
           const SizedBox(height: 12),
 
-          // Kullanılan ayak
-          const _Badge(label: '🦶 Sağ Ayak', color: Color(0xFF3A5A8A)),
+          _Badge(label: '🦶 $foot Ayak', color: const Color(0xFF3A5A8A)),
 
           const SizedBox(height: 24),
 
-          // Maç & Puan
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 32),
-            child: _StatsCard(),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            child: _StatsCard(
+              totalMatch: totalMatch,
+              avgRating: avgRating,
+            ),
           ),
 
           const SizedBox(height: 16),
 
-          // Ceza puanı
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 32),
-            child: _PenaltyCard(),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            child: _PenaltyCard(penaltyScore: penaltyScore),
           ),
 
           const SizedBox(height: 32),
@@ -154,7 +228,10 @@ class _Badge extends StatelessWidget {
 }
 
 class _StatsCard extends StatelessWidget {
-  const _StatsCard();
+  final int totalMatch;
+  final double avgRating;
+
+  const _StatsCard({required this.totalMatch, required this.avgRating});
 
   @override
   Widget build(BuildContext context) {
@@ -164,12 +241,15 @@ class _StatsCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
       ),
       padding: const EdgeInsets.symmetric(vertical: 20),
-      child: const IntrinsicHeight(
+      child: IntrinsicHeight(
         child: Row(
           children: [
-            _StatItem(value: '28', label: 'Maç'),
-            VerticalDivider(color: Colors.white24, thickness: 1, width: 1),
-            _StatItem(value: '4.6', label: 'Ort. Puan'),
+            _StatItem(value: '$totalMatch', label: 'Maç'),
+            const VerticalDivider(color: Colors.white24, thickness: 1, width: 1),
+            _StatItem(
+              value: avgRating.toStringAsFixed(1),
+              label: 'Ort. Puan',
+            ),
           ],
         ),
       ),
@@ -209,7 +289,9 @@ class _StatItem extends StatelessWidget {
 }
 
 class _PenaltyCard extends StatelessWidget {
-  const _PenaltyCard();
+  final int penaltyScore;
+
+  const _PenaltyCard({required this.penaltyScore});
 
   @override
   Widget build(BuildContext context) {
@@ -250,9 +332,9 @@ class _PenaltyCard extends StatelessWidget {
               color: const Color(0xFFF5E6C8),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: const Text(
-              '5',
-              style: TextStyle(
+            child: Text(
+              '$penaltyScore',
+              style: const TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.bold,
                 color: Color(0xFFB07000),
