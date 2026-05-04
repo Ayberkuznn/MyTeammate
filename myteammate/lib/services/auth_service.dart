@@ -73,6 +73,31 @@ class AuthService {
     return null;
   }
 
+  static Future<AuthResult> updateProfile(Map<String, dynamic> data) async {
+    final token = await _storage.read(key: 'access_token');
+    if (token == null) return const AuthResult(success: false, error: 'Oturum bulunamadı.');
+
+    final response = await http.put(
+      Uri.parse('$_baseUrl/api/user/profile'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+      body: jsonEncode(data),
+    );
+
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+
+    if (response.statusCode == 200) return const AuthResult(success: true);
+
+    if (response.statusCode == 400) {
+      final errors = (body['errors'] as List).join('\n');
+      return AuthResult(success: false, error: errors);
+    }
+
+    return AuthResult(success: false, error: body['error'] as String? ?? 'Bir hata oluştu.');
+  }
+
   static Future<AuthResult> verifyEmail(String email, String code) async {
     final response = await http.post(
       Uri.parse('$_baseUrl/api/auth/verify-email'),

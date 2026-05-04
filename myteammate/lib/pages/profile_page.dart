@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
+import 'edit_profile_page.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -135,13 +136,38 @@ class _ProfilePageState extends State<ProfilePage> {
         children: [
           const SizedBox(height: _avatarRadius + 16),
 
-          Text(
-            name,
-            style: const TextStyle(
-              fontSize: 26,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF1A1A1A),
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                name.toUpperCase(),
+                style: const TextStyle(
+                  fontSize: 26,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF1A1A1A),
+                ),
+              ),
+              const SizedBox(width: 8),
+              GestureDetector(
+                onTap: () async {
+                  final updated = await Navigator.push<bool>(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => EditProfilePage(currentProfile: _profile!),
+                    ),
+                  );
+                  if (updated == true) {
+                    setState(() => _isLoading = true);
+                    _loadProfile();
+                  }
+                },
+                child: const Icon(
+                  Icons.edit_outlined,
+                  size: 20,
+                  color: Color(0xFF5A8A5A),
+                ),
+              ),
+            ],
           ),
 
           const SizedBox(height: 20),

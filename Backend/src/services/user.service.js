@@ -33,4 +33,29 @@ async function getProfile(userId) {
   };
 }
 
-module.exports = { getProfile };
+const ALLOWED_POSITIONS   = ['Kaleci', 'Defans', 'Orta Saha', 'Forvet'];
+const ALLOWED_FEET        = ['Sağ', 'Sol', 'Her İkisi'];
+const ALLOWED_SKILL_LEVELS = ['Başlangıç', 'Orta Seviye', 'İleri Seviye'];
+
+async function updateProfile(userId, { City, District, Position, Foot, Skill_level }) {
+  const errors = [];
+
+  if (!City?.trim())     errors.push('İl zorunludur.');
+  if (!District?.trim()) errors.push('İlçe zorunludur.');
+  if (!Position || !ALLOWED_POSITIONS.includes(Position))       errors.push('Geçersiz pozisyon.');
+  if (!Foot     || !ALLOWED_FEET.includes(Foot))                errors.push('Geçersiz ayak tercihi.');
+  if (!Skill_level || !ALLOWED_SKILL_LEVELS.includes(Skill_level)) errors.push('Geçersiz yetenek seviyesi.');
+
+  if (errors.length > 0) return { status: 400, body: { errors } };
+
+  await pool.query(
+    `UPDATE "User"
+     SET "City" = $1, "District" = $2, "Position" = $3, "Foot" = $4, "Skill_level" = $5
+     WHERE user_id = $6`,
+    [City.trim(), District.trim(), Position, Foot, Skill_level, userId]
+  );
+
+  return { status: 200, body: { message: 'Profil güncellendi.' } };
+}
+
+module.exports = { getProfile, updateProfile };

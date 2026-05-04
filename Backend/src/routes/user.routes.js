@@ -14,4 +14,14 @@ router.get('/profile', requireAuth, async (req, res) => {
   }
 });
 
+router.put('/profile', requireAuth, async (req, res) => {
+  try {
+    const { status, body } = await userService.updateProfile(req.user.userId, req.body);
+    res.status(status).json(body);
+  } catch (err) {
+    console.error('Update profile error:', err);
+    res.status(500).json({ error: 'Sunucu hatası.' });
+  }
+});
+
 module.exports = router;
