@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'verification_page.dart';
 import '../services/auth_service.dart';
 
@@ -32,104 +34,30 @@ class _RegisterPageState extends State<RegisterPage> {
   final List<String> _feet        = ['Sağ', 'Sol', 'Her İkisi'];
   final List<String> _skillLevels = ['Başlangıç', 'Orta Seviye', 'İleri Seviye'];
 
-  final List<String> _cities = [
-    'Adana',
-    'Adıyaman',
-    'Afyonkarahisar',
-    'Ağrı',
-    'Amasya',
-    'Ankara',
-    'Antalya',
-    'Artvin',
-    'Aydın',
-    'Balıkesir',
-    'Bilecik',
-    'Bingöl',
-    'Bitlis',
-    'Bolu',
-    'Burdur',
-    'Bursa',
-    'Çanakkale',
-    'Çankırı',
-    'Çorum',
-    'Denizli',
-    'Diyarbakır',
-    'Edirne',
-    'Elazığ',
-    'Erzincan',
-    'Erzurum',
-    'Eskişehir',
-    'Gaziantep',
-    'Giresun',
-    'Gümüşhane',
-    'Hakkari',
-    'Hatay',
-    'Isparta',
-    'Mersin',
-    'İstanbul',
-    'İzmir',
-    'Kars',
-    'Kastamonu',
-    'Kayseri',
-    'Kırklareli',
-    'Kırşehir',
-    'Kocaeli',
-    'Konya',
-    'Kütahya',
-    'Malatya',
-    'Manisa',
-    'Kahramanmaraş',
-    'Mardin',
-    'Muğla',
-    'Muş',
-    'Nevşehir',
-    'Niğde',
-    'Ordu',
-    'Rize',
-    'Sakarya',
-    'Samsun',
-    'Siirt',
-    'Sinop',
-    'Sivas',
-    'Tekirdağ',
-    'Tokat',
-    'Trabzon',
-    'Tunceli',
-    'Şanlıurfa',
-    'Uşak',
-    'Van',
-    'Yozgat',
-    'Zonguldak',
-    'Aksaray',
-    'Bayburt',
-    'Karaman',
-    'Kırıkkale',
-    'Batman',
-    'Şırnak',
-    'Bartın',
-    'Ardahan',
-    'Iğdır',
-    'Yalova',
-    'Karabük',
-    'Kilis',
-    'Osmaniye',
-    'Düzce',
-  ];
+  List<Map<String, dynamic>> _cityData = [];
 
-  final List<String> _districts = [
-    'Kadıköy',
-    'Beşiktaş',
-    'Üsküdar',
-    'Fatih',
-    'Beyoğlu',
-    'Şişli',
-    'Bağcılar',
-    'Bahçelievler',
-  ];
+  List<String> get _cities =>
+      _cityData.map((e) => e['city'] as String).toList();
+
+  List<String> get _districts {
+    if (_selectedCity == null) return [];
+    final entry = _cityData.firstWhere(
+      (e) => e['city'] == _selectedCity,
+      orElse: () => {},
+    );
+    return List<String>.from(entry['counties'] as List? ?? []);
+  }
+
+  Future<void> _loadCityData() async {
+    final raw = await rootBundle.loadString('lib/data/city.json');
+    final list = jsonDecode(raw) as List;
+    if (mounted) setState(() => _cityData = list.cast<Map<String, dynamic>>());
+  }
 
   @override
   void initState() {
     super.initState();
+    _loadCityData();
     _nameController.addListener(_onFieldChanged);
     _surnameController.addListener(_onFieldChanged);
     _emailController.addListener(_onFieldChanged);
@@ -320,8 +248,10 @@ class _RegisterPageState extends State<RegisterPage> {
                               hint: 'İl',
                               value: _selectedCity,
                               items: _cities,
-                              onChanged: (val) =>
-                                  setState(() => _selectedCity = val),
+                              onChanged: (val) => setState(() {
+                                _selectedCity = val;
+                                _selectedDistrict = null;
+                              }),
                             ),
                           ),
                           const SizedBox(width: 8),
@@ -331,6 +261,7 @@ class _RegisterPageState extends State<RegisterPage> {
                               hint: 'İlçe',
                               value: _selectedDistrict,
                               items: _districts,
+                              enabled: _selectedCity != null,
                               onChanged: (val) =>
                                   setState(() => _selectedDistrict = val),
                             ),
@@ -539,10 +470,11 @@ class _RegisterPageState extends State<RegisterPage> {
     required String? value,
     required List<String> items,
     required void Function(String?) onChanged,
+    bool enabled = true,
   }) {
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFFB8C9B0),
+        color: enabled ? const Color(0xFFB8C9B0) : const Color(0xFFD0D0D0),
         borderRadius: BorderRadius.circular(24),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 2),
@@ -551,20 +483,23 @@ class _RegisterPageState extends State<RegisterPage> {
           value: value,
           hint: Text(
             hint,
-            style: const TextStyle(color: Color(0xFF4A4A4A), fontSize: 14),
+            style: TextStyle(
+              color: enabled ? const Color(0xFF4A4A4A) : const Color(0xFFAAAAAA),
+              fontSize: 14,
+            ),
           ),
           isExpanded: true,
-          icon: const Icon(
+          icon: Icon(
             Icons.keyboard_arrow_down,
-            color: Color(0xFF4A4A4A),
+            color: enabled ? const Color(0xFF4A4A4A) : const Color(0xFFAAAAAA),
             size: 20,
           ),
           dropdownColor: const Color(0xFFB8C9B0),
           style: const TextStyle(color: Color(0xFF2A2A2A), fontSize: 14),
-          items: items
-              .map((item) => DropdownMenuItem(value: item, child: Text(item)))
-              .toList(),
-          onChanged: onChanged,
+          items: enabled
+              ? items.map((item) => DropdownMenuItem(value: item, child: Text(item))).toList()
+              : null,
+          onChanged: enabled ? onChanged : null,
         ),
       ),
     );

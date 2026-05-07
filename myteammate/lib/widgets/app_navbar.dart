@@ -153,8 +153,8 @@ class _CenterButton extends StatelessWidget {
           ],
         ),
         child: Icon(
-          Icons.menu,
-          size: 26,
+          Icons.add,
+          size: 28,
           color: isActive ? Colors.white : const Color(0xFF3A3A3A),
         ),
       ),
