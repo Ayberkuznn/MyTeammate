@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../services/auth_service.dart';
 
 class CreateMatchPage extends StatefulWidget {
   const CreateMatchPage({super.key});
@@ -20,18 +21,20 @@ class _CreateMatchPageState extends State<CreateMatchPage> {
   DateTime _selectedDate = DateTime.now();
   TimeOfDay _selectedTime = const TimeOfDay(hour: 20, minute: 0);
 
-  int _kaleci   = 1;
-  int _defans   = 0;
+  int _kaleci = 1;
+  int _defans = 0;
   int _ortaSaha = 0;
-  int _forvet   = 0;
+  int _forvet = 0;
 
   int _skillIndex = 1;
 
   final _feeController = TextEditingController();
 
-  final List<String> _fields = [
-    'Fenerbahçe Spor Kompleksi', 'Başakşehir Living Lab', 'Nike Park', 'Decathlon Saha',
-  ];
+  List<Map<String, dynamic>> _fieldData = [];
+  bool _fieldsLoading = false;
+
+  List<String> get _fieldNames =>
+      _fieldData.map((e) => e['name'] as String).toList();
 
   List<String> get _cities =>
       _cityData.map((e) => e['city'] as String).toList();
@@ -61,6 +64,24 @@ class _CreateMatchPageState extends State<CreateMatchPage> {
     }
   }
 
+  Future<void> _loadFields() async {
+    if (_selectedCity == null || _selectedDistrict == null) return;
+    setState(() {
+      _fieldsLoading = true;
+      _fieldData = [];
+      _selectedField = null;
+    });
+    final data = await AuthService.getFields(
+      city: _selectedCity!,
+      district: _selectedDistrict!,
+    );
+    if (mounted)
+      setState(() {
+        _fieldData = data;
+        _fieldsLoading = false;
+      });
+  }
+
   @override
   void dispose() {
     _feeController.dispose();
@@ -69,8 +90,19 @@ class _CreateMatchPageState extends State<CreateMatchPage> {
 
   String _formatDate(DateTime d) {
     const months = [
-      '', 'OCA', 'ŞUB', 'MAR', 'NİS', 'MAY', 'HAZ',
-      'TEM', 'AĞU', 'EYL', 'EKİ', 'KAS', 'ARA',
+      '',
+      'OCA',
+      'ŞUB',
+      'MAR',
+      'NİS',
+      'MAY',
+      'HAZ',
+      'TEM',
+      'AĞU',
+      'EYL',
+      'EKİ',
+      'KAS',
+      'ARA',
     ];
     return '${d.day} ${months[d.month]}';
   }
@@ -169,7 +201,11 @@ class _CreateMatchPageState extends State<CreateMatchPage> {
       child: Row(
         children: [
           IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new, size: 20, color: Color(0xFF2A2A2A)),
+            icon: const Icon(
+              Icons.arrow_back_ios_new,
+              size: 20,
+              color: Color(0xFF2A2A2A),
+            ),
             onPressed: () {},
           ),
           const Text(
@@ -206,7 +242,14 @@ class _CreateMatchPageState extends State<CreateMatchPage> {
             hint: 'İl',
             value: _selectedCity,
             items: _cities,
-            onChanged: (v) => setState(() { _selectedCity = v; _selectedDistrict = null; }),
+            onChanged: (v) {
+              setState(() {
+                _selectedCity = v;
+                _selectedDistrict = null;
+                _fieldData = [];
+                _selectedField = null;
+              });
+            },
           ),
         ),
         const SizedBox(width: 10),
@@ -217,7 +260,10 @@ class _CreateMatchPageState extends State<CreateMatchPage> {
             value: _selectedDistrict,
             items: _districts,
             enabled: _selectedCity != null,
-            onChanged: (v) => setState(() => _selectedDistrict = v),
+            onChanged: (v) {
+              setState(() => _selectedDistrict = v);
+              _loadFields();
+            },
           ),
         ),
       ],
@@ -225,15 +271,21 @@ class _CreateMatchPageState extends State<CreateMatchPage> {
   }
 
   Widget _buildFieldRow() {
-    final fieldEnabled = _selectedCity != null && _selectedDistrict != null;
+    final fieldEnabled =
+        _selectedCity != null && _selectedDistrict != null && !_fieldsLoading;
+    final hint = _fieldsLoading
+        ? 'Yükleniyor...'
+        : (_fieldNames.isEmpty && _selectedDistrict != null
+              ? 'Saha bulunamadı'
+              : 'Saha');
     return Row(
       children: [
         Expanded(
           child: _dropdown(
-            hint: 'Saha',
+            hint: hint,
             value: _selectedField,
-            items: _fields,
-            enabled: fieldEnabled,
+            items: _fieldNames,
+            enabled: fieldEnabled && _fieldNames.isNotEmpty,
             onChanged: (v) => setState(() => _selectedField = v),
           ),
         ),
@@ -272,7 +324,11 @@ class _CreateMatchPageState extends State<CreateMatchPage> {
                       color: Color(0xFF1A1A1A),
                     ),
                   ),
-                  const Icon(Icons.keyboard_arrow_down, color: Color(0xFF4A4A4A), size: 22),
+                  const Icon(
+                    Icons.keyboard_arrow_down,
+                    color: Color(0xFF4A4A4A),
+                    size: 22,
+                  ),
                 ],
               ),
             ),
@@ -294,7 +350,11 @@ class _CreateMatchPageState extends State<CreateMatchPage> {
                       color: Color(0xFF1A1A1A),
                     ),
                   ),
-                  const Icon(Icons.keyboard_arrow_down, color: Color(0xFF4A4A4A), size: 22),
+                  const Icon(
+                    Icons.keyboard_arrow_down,
+                    color: Color(0xFF4A4A4A),
+                    size: 22,
+                  ),
                 ],
               ),
             ),
@@ -339,10 +399,14 @@ class _CreateMatchPageState extends State<CreateMatchPage> {
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Column(
         children: [
-          _counterRow('Kaleci',   _kaleci,   (v) => setState(() => _kaleci   = v)),
-          _counterRow('Defans',   _defans,   (v) => setState(() => _defans   = v)),
-          _counterRow('Orta Saha', _ortaSaha, (v) => setState(() => _ortaSaha = v)),
-          _counterRow('Forvet',   _forvet,   (v) => setState(() => _forvet   = v)),
+          _counterRow('Kaleci', _kaleci, (v) => setState(() => _kaleci = v)),
+          _counterRow('Defans', _defans, (v) => setState(() => _defans = v)),
+          _counterRow(
+            'Orta Saha',
+            _ortaSaha,
+            (v) => setState(() => _ortaSaha = v),
+          ),
+          _counterRow('Forvet', _forvet, (v) => setState(() => _forvet = v)),
         ],
       ),
     );
@@ -379,10 +443,7 @@ class _CreateMatchPageState extends State<CreateMatchPage> {
               ),
             ),
           ),
-          _counterBtn(
-            icon: Icons.add,
-            onTap: () => onChange(value + 1),
-          ),
+          _counterBtn(icon: Icons.add, onTap: () => onChange(value + 1)),
         ],
       ),
     );
@@ -470,7 +531,10 @@ class _CreateMatchPageState extends State<CreateMatchPage> {
             fontWeight: FontWeight.w600,
             color: Color(0xFF4A7A4A),
           ),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 18,
+            vertical: 14,
+          ),
           border: InputBorder.none,
         ),
       ),
@@ -486,13 +550,19 @@ class _CreateMatchPageState extends State<CreateMatchPage> {
           backgroundColor: const Color(0xFF2E5A1C),
           foregroundColor: Colors.white,
           disabledBackgroundColor: const Color(0xFFAAAAAA),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
           padding: const EdgeInsets.symmetric(vertical: 16),
           elevation: 2,
         ),
         child: const Text(
           'Maç Oluştur',
-          style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, letterSpacing: 0.3),
+          style: TextStyle(
+            fontSize: 17,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.3,
+          ),
         ),
       ),
     );
@@ -526,7 +596,9 @@ class _CreateMatchPageState extends State<CreateMatchPage> {
           hint: Text(
             hint,
             style: TextStyle(
-              color: enabled ? const Color(0xFF9A9A9A) : const Color(0xFFBBBBBB),
+              color: enabled
+                  ? const Color(0xFF9A9A9A)
+                  : const Color(0xFFBBBBBB),
               fontSize: 14,
             ),
           ),
@@ -539,7 +611,9 @@ class _CreateMatchPageState extends State<CreateMatchPage> {
           dropdownColor: Colors.white,
           style: const TextStyle(color: Color(0xFF1A1A1A), fontSize: 14),
           items: enabled
-              ? items.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList()
+              ? items
+                    .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+                    .toList()
               : null,
           onChanged: onChanged,
         ),
@@ -549,7 +623,9 @@ class _CreateMatchPageState extends State<CreateMatchPage> {
 
   void _createMatch() {
     const skillLevels = ['Başlangıç', 'Orta Seviye', 'İleri Seviye'];
-    final fee = _feeController.text.isEmpty ? 0 : int.parse(_feeController.text);
+    final fee = _feeController.text.isEmpty
+        ? 0
+        : int.parse(_feeController.text);
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(

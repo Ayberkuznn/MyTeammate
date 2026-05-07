@@ -98,6 +98,32 @@ class AuthService {
     return AuthResult(success: false, error: body['error'] as String? ?? 'Bir hata oluştu.');
   }
 
+  static Future<List<Map<String, dynamic>>> getFields({
+    required String city,
+    required String district,
+  }) async {
+    final token = await _storage.read(key: 'access_token');
+    if (token == null) return [];
+
+    final uri = Uri.parse('$_baseUrl/api/field').replace(
+      queryParameters: {'city': city, 'district': district},
+    );
+
+    final response = await http.get(
+      uri,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+
+    if (response.statusCode == 200) {
+      final list = jsonDecode(response.body) as List;
+      return list.cast<Map<String, dynamic>>();
+    }
+    return [];
+  }
+
   static Future<AuthResult> verifyEmail(String email, String code) async {
     final response = await http.post(
       Uri.parse('$_baseUrl/api/auth/verify-email'),

@@ -52,9 +52,9 @@ class _LoginPageState extends State<LoginPage> {
       }
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Sunucuya bağlanılamadı.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Sunucuya bağlanılamadı.')));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
