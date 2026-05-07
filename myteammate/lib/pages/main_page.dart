@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'login_page.dart';
 import 'profile_page.dart';
+import 'create_match_page.dart';
 import '../widgets/app_navbar.dart';
 
 class MainPage extends StatefulWidget {
@@ -80,8 +81,8 @@ class _MainPageState extends State<MainPage> {
           ),
           // 1 — Arama
           const Center(child: Text('Arama')),
-          // 2 — Menü
-          const Center(child: Text('Menü')),
+          // 2 — Maç Oluştur
+          const CreateMatchPage(),
           // 3 — Bildirimler
           const Center(child: Text('Bildirimler')),
           // 4 — Profil

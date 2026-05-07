@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../services/auth_service.dart';
 
 class EditProfilePage extends StatefulWidget {
@@ -22,34 +24,41 @@ class _EditProfilePageState extends State<EditProfilePage> {
   final List<String> _feet        = ['Sağ', 'Sol', 'Her İkisi'];
   final List<String> _skillLevels = ['Başlangıç', 'Orta Seviye', 'İleri Seviye'];
 
-  final List<String> _cities = [
-    'Adana', 'Adıyaman', 'Afyonkarahisar', 'Ağrı', 'Amasya', 'Ankara', 'Antalya',
-    'Artvin', 'Aydın', 'Balıkesir', 'Bilecik', 'Bingöl', 'Bitlis', 'Bolu', 'Burdur',
-    'Bursa', 'Çanakkale', 'Çankırı', 'Çorum', 'Denizli', 'Diyarbakır', 'Edirne',
-    'Elazığ', 'Erzincan', 'Erzurum', 'Eskişehir', 'Gaziantep', 'Giresun', 'Gümüşhane',
-    'Hakkari', 'Hatay', 'Isparta', 'Mersin', 'İstanbul', 'İzmir', 'Kars', 'Kastamonu',
-    'Kayseri', 'Kırklareli', 'Kırşehir', 'Kocaeli', 'Konya', 'Kütahya', 'Malatya',
-    'Manisa', 'Kahramanmaraş', 'Mardin', 'Muğla', 'Muş', 'Nevşehir', 'Niğde', 'Ordu',
-    'Rize', 'Sakarya', 'Samsun', 'Siirt', 'Sinop', 'Sivas', 'Tekirdağ', 'Tokat',
-    'Trabzon', 'Tunceli', 'Şanlıurfa', 'Uşak', 'Van', 'Yozgat', 'Zonguldak', 'Aksaray',
-    'Bayburt', 'Karaman', 'Kırıkkale', 'Batman', 'Şırnak', 'Bartın', 'Ardahan', 'Iğdır',
-    'Yalova', 'Karabük', 'Kilis', 'Osmaniye', 'Düzce',
-  ];
+  List<Map<String, dynamic>> _cityData = [];
 
-  final List<String> _districts = [
-    'Kadıköy', 'Beşiktaş', 'Üsküdar', 'Fatih', 'Beyoğlu', 'Şişli', 'Bağcılar',
-    'Bahçelievler',
-  ];
+  List<String> get _cities =>
+      _cityData.map((e) => e['city'] as String).toList();
+
+  List<String> get _districts {
+    if (_selectedCity == null) return [];
+    final entry = _cityData.firstWhere(
+      (e) => e['city'] == _selectedCity,
+      orElse: () => {},
+    );
+    return List<String>.from(entry['counties'] as List? ?? []);
+  }
+
+  Future<void> _loadCityData() async {
+    final raw = await rootBundle.loadString('lib/data/city.json');
+    final list = jsonDecode(raw) as List;
+    if (mounted) {
+      setState(() {
+        _cityData = list.cast<Map<String, dynamic>>();
+        final p = widget.currentProfile;
+        _selectedCity     = _cities.contains(p['city'])     ? p['city']     : _selectedCity;
+        _selectedDistrict = _districts.contains(p['district']) ? p['district'] : null;
+      });
+    }
+  }
 
   @override
   void initState() {
     super.initState();
     final p = widget.currentProfile;
-    _selectedCity      = _cities.contains(p['city'])           ? p['city']       : null;
-    _selectedDistrict  = _districts.contains(p['district'])    ? p['district']   : null;
-    _selectedPosition  = _positions.contains(p['position'])    ? p['position']   : null;
-    _selectedFoot      = _feet.contains(p['foot'])             ? p['foot']       : null;
+    _selectedPosition   = _positions.contains(p['position'])   ? p['position']   : null;
+    _selectedFoot       = _feet.contains(p['foot'])            ? p['foot']       : null;
     _selectedSkillLevel = _skillLevels.contains(p['skillLevel']) ? p['skillLevel'] : null;
+    _loadCityData();
   }
 
   bool get _isFormValid =>
@@ -63,10 +72,10 @@ class _EditProfilePageState extends State<EditProfilePage> {
     setState(() => _isLoading = true);
     try {
       final result = await AuthService.updateProfile({
-        'City':        _selectedCity,
-        'District':    _selectedDistrict,
-        'Position':    _selectedPosition,
-        'Foot':        _selectedFoot,
+        'City': _selectedCity,
+        'District': _selectedDistrict,
+        'Position': _selectedPosition,
+        'Foot': _selectedFoot,
         'Skill_level': _selectedSkillLevel,
       });
 
@@ -81,9 +90,9 @@ class _EditProfilePageState extends State<EditProfilePage> {
       }
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Sunucuya bağlanılamadı.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Sunucuya bağlanılamadı.')));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -138,7 +147,10 @@ class _EditProfilePageState extends State<EditProfilePage> {
                       // Değişmeyen alanlar (salt okunur)
                       _buildSectionLabel('Kişisel Bilgiler'),
                       const SizedBox(height: 8),
-                      _buildReadOnlyField(label: 'Ad Soyad', value: name),
+                      _buildReadOnlyField(
+                        label: 'Ad Soyad',
+                        value: name.toUpperCase(),
+                      ),
                       const SizedBox(height: 24),
 
                       // Düzenlenebilir alanlar
@@ -152,7 +164,10 @@ class _EditProfilePageState extends State<EditProfilePage> {
                               hint: 'İl',
                               value: _selectedCity,
                               items: _cities,
-                              onChanged: (val) => setState(() => _selectedCity = val),
+                              onChanged: (val) => setState(() {
+                                _selectedCity = val;
+                                _selectedDistrict = null;
+                              }),
                             ),
                           ),
                           const SizedBox(width: 8),
@@ -162,7 +177,9 @@ class _EditProfilePageState extends State<EditProfilePage> {
                               hint: 'İlçe',
                               value: _selectedDistrict,
                               items: _districts,
-                              onChanged: (val) => setState(() => _selectedDistrict = val),
+                              enabled: _selectedCity != null,
+                              onChanged: (val) =>
+                                  setState(() => _selectedDistrict = val),
                             ),
                           ),
                         ],
@@ -175,7 +192,8 @@ class _EditProfilePageState extends State<EditProfilePage> {
                         hint: 'Tercih Edilen Pozisyon',
                         value: _selectedPosition,
                         items: _positions,
-                        onChanged: (val) => setState(() => _selectedPosition = val),
+                        onChanged: (val) =>
+                            setState(() => _selectedPosition = val),
                       ),
                       const SizedBox(height: 10),
                       _buildDropdown(
@@ -189,7 +207,8 @@ class _EditProfilePageState extends State<EditProfilePage> {
                         hint: 'Yetenek Seviyesi',
                         value: _selectedSkillLevel,
                         items: _skillLevels,
-                        onChanged: (val) => setState(() => _selectedSkillLevel = val),
+                        onChanged: (val) =>
+                            setState(() => _selectedSkillLevel = val),
                       ),
                       const SizedBox(height: 24),
 
@@ -218,7 +237,10 @@ class _EditProfilePageState extends State<EditProfilePage> {
                                     strokeWidth: 2,
                                   ),
                                 )
-                              : const Text('Kaydet', style: TextStyle(fontSize: 14)),
+                              : const Text(
+                                  'Kaydet',
+                                  style: TextStyle(fontSize: 14),
+                                ),
                         ),
                       ),
                       const SizedBox(height: 24),
@@ -271,22 +293,35 @@ class _EditProfilePageState extends State<EditProfilePage> {
     required String? value,
     required List<String> items,
     required void Function(String?) onChanged,
+    bool enabled = true,
   }) {
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFFB8C9B0),
+        color: enabled ? const Color(0xFFB8C9B0) : const Color(0xFFD0D0D0),
         borderRadius: BorderRadius.circular(24),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 2),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
           value: value,
-          hint: Text(hint, style: const TextStyle(color: Color(0xFF4A4A4A), fontSize: 14)),
+          hint: Text(
+            hint,
+            style: TextStyle(
+              color: enabled ? const Color(0xFF4A4A4A) : const Color(0xFFAAAAAA),
+              fontSize: 14,
+            ),
+          ),
           isExpanded: true,
-          icon: const Icon(Icons.keyboard_arrow_down, color: Color(0xFF4A4A4A), size: 20),
+          icon: Icon(
+            Icons.keyboard_arrow_down,
+            color: enabled ? const Color(0xFF4A4A4A) : const Color(0xFFAAAAAA),
+            size: 20,
+          ),
           dropdownColor: const Color(0xFFB8C9B0),
           style: const TextStyle(color: Color(0xFF2A2A2A), fontSize: 14),
-          items: items.map((item) => DropdownMenuItem(value: item, child: Text(item))).toList(),
+          items: items
+              .map((item) => DropdownMenuItem(value: item, child: Text(item)))
+              .toList(),
           onChanged: onChanged,
         ),
       ),
