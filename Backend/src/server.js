@@ -3,6 +3,7 @@ const express = require('express');
 const authRoutes  = require('./routes/auth.routes');
 const userRoutes  = require('./routes/user.routes');
 const fieldRoutes = require('./routes/field.routes');
+const matchRoutes = require('./routes/match.routes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -15,6 +16,7 @@ app.get('/api',    (req, res) => res.json({ message: 'MyTeammate API' }));
 app.use('/api/auth',  authRoutes);
 app.use('/api/user',  userRoutes);
 app.use('/api/field', fieldRoutes);
+app.use('/api/match', matchRoutes);
 
 if (require.main === module) {
   app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
