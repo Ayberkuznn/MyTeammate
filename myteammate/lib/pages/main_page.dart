@@ -82,7 +82,9 @@ class _MainPageState extends State<MainPage> {
           // 1 — Arama
           const Center(child: Text('Arama')),
           // 2 — Maç Oluştur
-          const CreateMatchPage(),
+          CreateMatchPage(
+            onMatchCreated: () => setState(() => _navIndex = 0),
+          ),
           // 3 — Bildirimler
           const Center(child: Text('Bildirimler')),
           // 4 — Profil

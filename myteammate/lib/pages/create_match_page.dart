@@ -4,7 +4,9 @@ import 'package:flutter/services.dart';
 import '../services/auth_service.dart';
 
 class CreateMatchPage extends StatefulWidget {
-  const CreateMatchPage({super.key});
+  final VoidCallback? onMatchCreated;
+
+  const CreateMatchPage({super.key, this.onMatchCreated});
 
   @override
   State<CreateMatchPage> createState() => _CreateMatchPageState();
@@ -35,6 +37,16 @@ class _CreateMatchPageState extends State<CreateMatchPage> {
 
   List<String> get _fieldNames =>
       _fieldData.map((e) => e['name'] as String).toList();
+
+  int? get _selectedFieldCapacity {
+    if (_selectedField == null) return null;
+    final entry = _fieldData.firstWhere(
+      (e) => e['name'] == _selectedField,
+      orElse: () => {},
+    );
+    final cap = entry['capacity'];
+    return cap is int ? cap : null;
+  }
 
   List<String> get _cities =>
       _cityData.map((e) => e['city'] as String).toList();
@@ -399,20 +411,19 @@ class _CreateMatchPageState extends State<CreateMatchPage> {
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Column(
         children: [
-          _counterRow('Kaleci', _kaleci, (v) => setState(() => _kaleci = v)),
-          _counterRow('Defans', _defans, (v) => setState(() => _defans = v)),
-          _counterRow(
-            'Orta Saha',
-            _ortaSaha,
-            (v) => setState(() => _ortaSaha = v),
-          ),
-          _counterRow('Forvet', _forvet, (v) => setState(() => _forvet = v)),
+          _counterRow('Kaleci',   _kaleci,   (v) => setState(() => _kaleci   = v)),
+          _counterRow('Defans',   _defans,   (v) => setState(() => _defans   = v)),
+          _counterRow('Orta Saha', _ortaSaha, (v) => setState(() => _ortaSaha = v)),
+          _counterRow('Forvet',   _forvet,   (v) => setState(() => _forvet   = v)),
         ],
       ),
     );
   }
 
   Widget _counterRow(String label, int value, ValueChanged<int> onChange) {
+    final cap = _selectedFieldCapacity;
+    final noField = _selectedField == null;
+    final atLimit = cap != null && _totalMissing >= cap - 1;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
       child: Row(
@@ -429,7 +440,7 @@ class _CreateMatchPageState extends State<CreateMatchPage> {
           ),
           _counterBtn(
             icon: Icons.remove,
-            onTap: value > 0 ? () => onChange(value - 1) : null,
+            onTap: !noField && value > 0 ? () => onChange(value - 1) : null,
           ),
           SizedBox(
             width: 32,
@@ -443,7 +454,10 @@ class _CreateMatchPageState extends State<CreateMatchPage> {
               ),
             ),
           ),
-          _counterBtn(icon: Icons.add, onTap: () => onChange(value + 1)),
+          _counterBtn(
+            icon: Icons.add,
+            onTap: noField || atLimit ? null : () => onChange(value + 1),
+          ),
         ],
       ),
     );
@@ -545,7 +559,7 @@ class _CreateMatchPageState extends State<CreateMatchPage> {
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton(
-        onPressed: _isFormValid ? _createMatch : null,
+        onPressed: _isFormValid && !_isCreating ? _createMatch : null,
         style: ElevatedButton.styleFrom(
           backgroundColor: const Color(0xFF2E5A1C),
           foregroundColor: Colors.white,
@@ -556,14 +570,20 @@ class _CreateMatchPageState extends State<CreateMatchPage> {
           padding: const EdgeInsets.symmetric(vertical: 16),
           elevation: 2,
         ),
-        child: const Text(
-          'Maç Oluştur',
-          style: TextStyle(
-            fontSize: 17,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.3,
-          ),
-        ),
+        child: _isCreating
+            ? const SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+              )
+            : const Text(
+                'Maç Oluştur',
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.3,
+                ),
+              ),
       ),
     );
   }
@@ -621,21 +641,72 @@ class _CreateMatchPageState extends State<CreateMatchPage> {
     );
   }
 
-  void _createMatch() {
-    const skillLevels = ['Başlangıç', 'Orta Seviye', 'İleri Seviye'];
-    final fee = _feeController.text.isEmpty
-        ? 0
-        : int.parse(_feeController.text);
+  bool _isCreating = false;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Maç oluşturuldu! Saha: $_selectedField | '
-          '${_formatDate(_selectedDate)} ${_formatTime(_selectedTime)} | '
-          'Eksik: $_totalMissing | Seviye: ${skillLevels[_skillIndex]} | Ücret: $fee ₺',
-        ),
-        backgroundColor: const Color(0xFF4A7A4A),
-      ),
-    );
+  void _resetForm() {
+    _feeController.clear();
+    setState(() {
+      _selectedCity     = null;
+      _selectedDistrict = null;
+      _selectedField    = null;
+      _fieldData        = [];
+      _selectedDate     = DateTime.now();
+      _selectedTime     = const TimeOfDay(hour: 20, minute: 0);
+      _kaleci           = 1;
+      _defans           = 0;
+      _ortaSaha         = 0;
+      _forvet           = 0;
+      _skillIndex       = 1;
+    });
+  }
+
+  Future<void> _createMatch() async {
+    if (_isCreating) return;
+    setState(() => _isCreating = true);
+
+    try {
+      final fieldEntry = _fieldData.firstWhere((e) => e['name'] == _selectedField);
+      final fee = _feeController.text.isEmpty ? 0 : int.parse(_feeController.text);
+      final minPoint = _skillIndex + 1; // Başlangıç→1, Orta→2, İleri→3
+
+      final result = await AuthService.createMatch({
+        'fieldId':          fieldEntry['id'],
+        'date':             '${_selectedDate.year}-${_selectedDate.month.toString().padLeft(2, '0')}-${_selectedDate.day.toString().padLeft(2, '0')}',
+        'time':             _formatTime(_selectedTime),
+        'requiredPlayers':  _totalMissing,
+        'minPointRequired': minPoint,
+        'pricePerPerson':   fee,
+        'positions': {
+          'kaleci':   _kaleci,
+          'defans':   _defans,
+          'ortaSaha': _ortaSaha,
+          'forvet':   _forvet,
+        },
+      });
+
+      if (!mounted) return;
+
+      if (result.success) {
+        _resetForm();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Maç ilanı oluşturuldu!'),
+            backgroundColor: Color(0xFF4A7A4A),
+          ),
+        );
+        widget.onMatchCreated?.call();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(result.error ?? 'Bir hata oluştu.')),
+        );
+      }
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Sunucuya bağlanılamadı.')),
+      );
+    } finally {
+      if (mounted) setState(() => _isCreating = false);
+    }
   }
 }
