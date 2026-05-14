@@ -1,17 +1,22 @@
 const pool = require('../config/db');
 
 async function getFields({ city, district }) {
+  const cleanCity     = typeof city     === 'string' ? city.trim()     : null;
+  const cleanDistrict = typeof district === 'string' ? district.trim() : null;
+
+  if (!cleanCity) return { status: 400, body: { error: 'İl parametresi zorunludur.' } };
+
   let query = `SELECT field_id, field_name, city, district, address, capacity,
                       has_shower, has_parking, phone_number
                FROM "Field"`;
   const params = [];
 
-  if (city && district) {
+  if (cleanCity && cleanDistrict) {
     query += ` WHERE city = $1 AND district = $2`;
-    params.push(city, district);
-  } else if (city) {
+    params.push(cleanCity, cleanDistrict);
+  } else if (cleanCity) {
     query += ` WHERE city = $1`;
-    params.push(city);
+    params.push(cleanCity);
   }
 
   query += ` ORDER BY field_name`;
