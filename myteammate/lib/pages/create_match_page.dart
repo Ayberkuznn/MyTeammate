@@ -87,11 +87,12 @@ class _CreateMatchPageState extends State<CreateMatchPage> {
       city: _selectedCity!,
       district: _selectedDistrict!,
     );
-    if (mounted)
+    if (mounted) {
       setState(() {
         _fieldData = data;
         _fieldsLoading = false;
       });
+    }
   }
 
   @override
