@@ -1,6 +1,6 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'login_page.dart';
+import 'package:flutter/services.dart';
 import 'profile_page.dart';
 import 'create_match_page.dart';
 import '../widgets/app_navbar.dart';
@@ -13,42 +13,7 @@ class MainPage extends StatefulWidget {
 }
 
 class _MainPageState extends State<MainPage> {
-  static const _storage = FlutterSecureStorage();
-  String? _email;
-  String? _name;
-  String? _surname;
   int _navIndex = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadEmail();
-  }
-
-  Future<void> _loadEmail() async {
-    final email = await _storage.read(key: 'user_email');
-    final name = await _storage.read(key: 'user_name');
-    final surname = await _storage.read(key: 'user_surname');
-
-    if (mounted) {
-      setState(() {
-        _email = email;
-        _name = name;
-        _surname = surname;
-      });
-    }
-  }
-
-  Future<void> _logout() async {
-    await _storage.delete(key: 'user_email');
-    await _storage.delete(key: 'access_token');
-    await _storage.delete(key: 'refresh_token');
-    if (!mounted) return;
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (_) => const LoginPage()),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -57,28 +22,7 @@ class _MainPageState extends State<MainPage> {
         index: _navIndex,
         children: [
           // 0 — Ana Sayfa
-          Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(_email ?? '', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-                Text(_name ?? '', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-                Text(_surname ?? '', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 24),
-                ElevatedButton(
-                  onPressed: _logout,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF2E2E2E),
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                    padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 10),
-                    elevation: 0,
-                  ),
-                  child: const Text('Çıkış Yap'),
-                ),
-              ],
-            ),
-          ),
+          _HomePage(onProfileTap: () => setState(() => _navIndex = 4)),
           // 1 — Arama
           const Center(child: Text('Arama')),
           // 2 — Maç Oluştur
@@ -99,24 +43,420 @@ class _MainPageState extends State<MainPage> {
   }
 }
 
-void main() {
-  runApp(const MyApp());
+// ─── Ana Sayfa ────────────────────────────────────────────────────────────────
+
+class _HomePage extends StatefulWidget {
+  final VoidCallback? onProfileTap;
+
+  const _HomePage({this.onProfileTap});
+
+  @override
+  State<_HomePage> createState() => _HomePageState();
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class _HomePageState extends State<_HomePage> {
+  int _viewIndex = 1; // 0: Harita, 1: Liste
+
+  List<Map<String, dynamic>> _cityData = [];
+  String? _selectedCity;
+  String? _selectedDistrict;
+
+  List<String> get _cities =>
+      _cityData.map((e) => e['city'] as String).toList();
+
+  List<String> get _districts {
+    if (_selectedCity == null) return [];
+    final entry = _cityData.firstWhere(
+      (e) => e['city'] == _selectedCity,
+      orElse: () => {},
+    );
+    return List<String>.from(entry['counties'] as List? ?? []);
+  }
+
+  // Mock maç verisi — backend bağlantısı kurulunca API çağrısıyla değişir
+  final List<Map<String, dynamic>> _matches = [
+    {
+      'fieldName': 'Kadıköy Moda Spor Tesisleri',
+      'date': DateTime(2026, 2, 26, 20, 0),
+      'currentPlayers': 13,
+      'totalPlayers': 14,
+      'skillLevel': 'Orta Seviye',
+      'city': 'İstanbul',
+      'district': 'Kadıköy',
+    },
+    {
+      'fieldName': 'Beşiktaş Spor Kulübü Sahası',
+      'date': DateTime(2026, 2, 27, 19, 0),
+      'currentPlayers': 8,
+      'totalPlayers': 12,
+      'skillLevel': 'Başlangıç',
+      'city': 'İstanbul',
+      'district': 'Beşiktaş',
+    },
+    {
+      'fieldName': 'Ataşehir Halı Saha Kompleksi',
+      'date': DateTime(2026, 2, 28, 21, 0),
+      'currentPlayers': 10,
+      'totalPlayers': 10,
+      'skillLevel': 'İleri Seviye',
+      'city': 'İstanbul',
+      'district': 'Ataşehir',
+    },
+    {
+      'fieldName': 'Maltepe Sahil Spor Tesisi',
+      'date': DateTime(2026, 3, 1, 18, 30),
+      'currentPlayers': 5,
+      'totalPlayers': 14,
+      'skillLevel': 'Orta Seviye',
+      'city': 'İstanbul',
+      'district': 'Maltepe',
+    },
+  ];
+
+  List<Map<String, dynamic>> get _filteredMatches => _matches.where((m) {
+        if (_selectedCity != null && m['city'] != _selectedCity) return false;
+        if (_selectedDistrict != null && m['district'] != _selectedDistrict) return false;
+        return true;
+      }).toList();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCityData();
+  }
+
+  Future<void> _loadCityData() async {
+    final raw = await rootBundle.loadString('lib/data/city.json');
+    final list = jsonDecode(raw) as List;
+    if (mounted) setState(() => _cityData = list.cast<Map<String, dynamic>>());
+  }
+
+  String _formatDate(DateTime date) {
+    const days = ['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi', 'Pazar'];
+    const months = [
+      '', 'Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran',
+      'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık',
+    ];
+    final h = date.hour.toString().padLeft(2, '0');
+    final m = date.minute.toString().padLeft(2, '0');
+    return '${days[date.weekday - 1]}, ${date.day} ${months[date.month]} - $h:$m';
+  }
+
+  Color _skillColor(String level) {
+    switch (level) {
+      case 'Başlangıç':    return const Color(0xFF3A7A9A);
+      case 'İleri Seviye': return const Color(0xFF2E5A1C);
+      default:             return const Color(0xFF7A8A30);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    return const MaterialApp(
-      debugShowCheckedModeBanner: false,
-      home: Scaffold(
-        body: Center(
-          child: Text(
-            'ayberk',
-            style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
+    return Scaffold(
+      backgroundColor: const Color(0xFFE8E8E8),
+      body: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildTopBar(),
+            const SizedBox(height: 16),
+            _buildTitle(),
+            const SizedBox(height: 12),
+            _buildFilterRow(),
+            const SizedBox(height: 12),
+            Expanded(
+              child: _viewIndex == 1 ? _buildList() : _buildMapPlaceholder(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTopBar() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      child: Row(
+        children: [
+          const Spacer(),
+          _buildToggle(),
+          const Spacer(),
+          GestureDetector(
+            onTap: widget.onProfileTap,
+            child: Container(
+              width: 40,
+              height: 40,
+              decoration: const BoxDecoration(
+                color: Color(0xFFAAAAAA),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.person, color: Colors.white, size: 24),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildToggle() {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF3A5A1A),
+        borderRadius: BorderRadius.circular(24),
+      ),
+      padding: const EdgeInsets.all(3),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [_toggleTab('HARİTA', 0), _toggleTab('LİSTE', 1)],
+      ),
+    );
+  }
+
+  Widget _toggleTab(String label, int index) {
+    final active = _viewIndex == index;
+    return GestureDetector(
+      onTap: () => setState(() => _viewIndex = index),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 8),
+        decoration: BoxDecoration(
+          color: active ? const Color(0xFF6AAA3A) : Colors.transparent,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            color: active ? Colors.white : const Color(0xFFB8D8A0),
+            letterSpacing: 0.5,
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildTitle() {
+    return const Padding(
+      padding: EdgeInsets.symmetric(horizontal: 20),
+      child: Text(
+        'Yaklaşan Maçlar',
+        style: TextStyle(
+          fontSize: 22,
+          fontWeight: FontWeight.w800,
+          color: Color(0xFF3A7A3A),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFilterRow() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(
+        children: [
+          Expanded(
+            child: _filterDropdown(
+              hint: 'İl',
+              value: _selectedCity,
+              items: _cities,
+              onChanged: (v) => setState(() {
+                _selectedCity = v;
+                _selectedDistrict = null;
+              }),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: _filterDropdown(
+              hint: 'İlçe',
+              value: _selectedDistrict,
+              items: _districts,
+              enabled: _selectedCity != null,
+              onChanged: (v) => setState(() => _selectedDistrict = v),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _filterDropdown({
+    required String hint,
+    required String? value,
+    required List<String> items,
+    required void Function(String?) onChanged,
+    bool enabled = true,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: value,
+          hint: Text(
+            hint,
+            style: TextStyle(
+              color: enabled ? const Color(0xFF9A9A9A) : const Color(0xFFBBBBBB),
+              fontSize: 13,
+            ),
+          ),
+          isExpanded: true,
+          icon: Icon(
+            Icons.keyboard_arrow_down,
+            color: enabled ? const Color(0xFF4A4A4A) : const Color(0xFFBBBBBB),
+            size: 20,
+          ),
+          dropdownColor: Colors.white,
+          style: const TextStyle(color: Color(0xFF1A1A1A), fontSize: 13),
+          items: enabled
+              ? items.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList()
+              : null,
+          onChanged: enabled ? onChanged : null,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildList() {
+    final matches = _filteredMatches;
+    if (matches.isEmpty) {
+      return const Center(
+        child: Text(
+          'Uygun maç bulunamadı.',
+          style: TextStyle(color: Color(0xFF8A8A8A), fontSize: 15),
+        ),
+      );
+    }
+    return ListView.separated(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+      itemCount: matches.length,
+      separatorBuilder: (_, _) => const SizedBox(height: 12),
+      itemBuilder: (_, i) => _buildMatchCard(matches[i], highlighted: i == 0),
+    );
+  }
+
+  Widget _buildMatchCard(Map<String, dynamic> match, {bool highlighted = false}) {
+    final date = match['date'] as DateTime;
+    final current = match['currentPlayers'] as int;
+    final total = match['totalPlayers'] as int;
+    final level = match['skillLevel'] as String;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: highlighted
+            ? Border.all(color: const Color(0xFF4A7A4A), width: 2)
+            : null,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.07),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            match['fieldName'] as String,
+            style: const TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF1A1A1A),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            _formatDate(date),
+            style: const TextStyle(fontSize: 13, color: Color(0xFF7A7A7A)),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              const Icon(Icons.group, size: 18, color: Color(0xFF3A3A3A)),
+              const SizedBox(width: 6),
+              Text(
+                '$current/$total Oyuncu',
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: Color(0xFF1A1A1A),
+                ),
+              ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                decoration: BoxDecoration(
+                  color: _skillColor(level),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  level,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: current < total ? () {} : null,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF4A7A4A),
+                foregroundColor: Colors.white,
+                disabledBackgroundColor: const Color(0xFFAAAAAA),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                elevation: 0,
+              ),
+              child: Text(
+                current >= total ? 'DOLU' : 'KATIL',
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 1,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMapPlaceholder() {
+    return const Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.map_outlined, size: 64, color: Color(0xFFAAAAAA)),
+          SizedBox(height: 12),
+          Text(
+            'Harita görünümü yakında',
+            style: TextStyle(fontSize: 16, color: Color(0xFF8A8A8A)),
+          ),
+        ],
       ),
     );
   }
