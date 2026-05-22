@@ -94,4 +94,63 @@ async function createMatch(creatorId, { fieldId, date, time, requiredPlayers, mi
   }
 }
 
-module.exports = { createMatch };
+async function getMatches({ city, district } = {}) {
+  const cleanCity     = typeof city     === 'string' ? city.trim()     : null;
+  const cleanDistrict = typeof district === 'string' ? district.trim() : null;
+
+  const params = [];
+  const conditions = [`m.status = 'active'`, `m."Date" >= CURRENT_DATE`];
+
+  if (cleanCity) {
+    params.push(cleanCity);
+    conditions.push(`f.city = $${params.length}`);
+  }
+  if (cleanDistrict) {
+    params.push(cleanDistrict);
+    conditions.push(`f.district = $${params.length}`);
+  }
+
+  const where = conditions.join(' AND ');
+
+  const result = await pool.query(
+    `SELECT
+       m.match_id,
+       f.field_name,
+       f.city,
+       f.district,
+       m."Date"                               AS date,
+       m."Time"                               AS time,
+       m.required_players,
+       COALESCE(SUM(mr.filled_count), 0)::int AS filled_players,
+       m.min_point_required,
+       m.price_per_person,
+       m.status
+     FROM "Match" m
+     JOIN "Field" f ON m.field_id = f.field_id
+     LEFT JOIN "Match_req" mr ON m.match_id = mr.match_id
+     WHERE ${where}
+     GROUP BY m.match_id, f.field_name, f.city, f.district
+     ORDER BY m."Date" ASC, m."Time" ASC`,
+    params,
+  );
+
+  const skillMap = { 1: 'Başlangıç', 2: 'Orta Seviye', 3: 'İleri Seviye' };
+
+  return {
+    status: 200,
+    body: result.rows.map((r) => ({
+      matchId:        r.match_id,
+      fieldName:      r.field_name,
+      city:           r.city,
+      district:       r.district,
+      date:           r.date,
+      time:           r.time,
+      requiredPlayers: r.required_players,
+      filledPlayers:  r.filled_players,
+      skillLevel:     skillMap[r.min_point_required] ?? 'Orta Seviye',
+      pricePerPerson: Number(r.price_per_person),
+    })),
+  };
+}
+
+module.exports = { createMatch, getMatches };
