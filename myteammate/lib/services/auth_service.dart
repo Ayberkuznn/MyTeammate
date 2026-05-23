@@ -162,4 +162,50 @@ class AuthService {
 
     return AuthResult(success: false, error: body['error'] as String? ?? 'Doğrulama başarısız.');
   }
+
+  static Future<void> logout() async {
+    await _storage.delete(key: 'access_token');
+    await _storage.delete(key: 'refresh_token');
+    await _storage.delete(key: 'user_email');
+    await _storage.delete(key: 'user_name');
+    await _storage.delete(key: 'user_surname');
+    await _storage.delete(key: 'user_id');
+  }
+
+  static Future<({List<Map<String, dynamic>> matches, String? error})> getMatches({
+    String? city,
+    String? district,
+  }) async {
+    final token = await _storage.read(key: 'access_token');
+    if (token == null) return (matches: <Map<String, dynamic>>[], error: 'Oturum bulunamadı.');
+
+    final queryParams = <String, String>{};
+    if (city != null) queryParams['city'] = city;
+    if (district != null) queryParams['district'] = district;
+
+    final uri = Uri.parse('$_baseUrl/api/match').replace(queryParameters: queryParams);
+
+    try {
+      final response = await http.get(
+        uri,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final list = jsonDecode(response.body) as List;
+        return (matches: list.cast<Map<String, dynamic>>(), error: null);
+      }
+
+      final body = jsonDecode(response.body) as Map<String, dynamic>;
+      return (
+        matches: <Map<String, dynamic>>[],
+        error: '[${response.statusCode}] ${body['error'] ?? response.body}',
+      );
+    } catch (e) {
+      return (matches: <Map<String, dynamic>>[], error: 'Sunucuya bağlanılamadı: $e');
+    }
+  }
 }

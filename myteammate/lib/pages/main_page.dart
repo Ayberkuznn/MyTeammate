@@ -3,7 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'profile_page.dart';
 import 'create_match_page.dart';
+import 'match_detail_page.dart';
+import 'login_page.dart';
 import '../widgets/app_navbar.dart';
+import '../services/auth_service.dart';
 
 class MainPage extends StatefulWidget {
   const MainPage({super.key});
@@ -61,6 +64,10 @@ class _HomePageState extends State<_HomePage> {
   String? _selectedCity;
   String? _selectedDistrict;
 
+  List<Map<String, dynamic>> _matches = [];
+  bool _matchesLoading = false;
+  String? _matchesError;
+
   List<String> get _cities =>
       _cityData.map((e) => e['city'] as String).toList();
 
@@ -73,62 +80,52 @@ class _HomePageState extends State<_HomePage> {
     return List<String>.from(entry['counties'] as List? ?? []);
   }
 
-  // Mock maç verisi — backend bağlantısı kurulunca API çağrısıyla değişir
-  final List<Map<String, dynamic>> _matches = [
-    {
-      'fieldName': 'Kadıköy Moda Spor Tesisleri',
-      'date': DateTime(2026, 2, 26, 20, 0),
-      'currentPlayers': 13,
-      'totalPlayers': 14,
-      'skillLevel': 'Orta Seviye',
-      'city': 'İstanbul',
-      'district': 'Kadıköy',
-    },
-    {
-      'fieldName': 'Beşiktaş Spor Kulübü Sahası',
-      'date': DateTime(2026, 2, 27, 19, 0),
-      'currentPlayers': 8,
-      'totalPlayers': 12,
-      'skillLevel': 'Başlangıç',
-      'city': 'İstanbul',
-      'district': 'Beşiktaş',
-    },
-    {
-      'fieldName': 'Ataşehir Halı Saha Kompleksi',
-      'date': DateTime(2026, 2, 28, 21, 0),
-      'currentPlayers': 10,
-      'totalPlayers': 10,
-      'skillLevel': 'İleri Seviye',
-      'city': 'İstanbul',
-      'district': 'Ataşehir',
-    },
-    {
-      'fieldName': 'Maltepe Sahil Spor Tesisi',
-      'date': DateTime(2026, 3, 1, 18, 30),
-      'currentPlayers': 5,
-      'totalPlayers': 14,
-      'skillLevel': 'Orta Seviye',
-      'city': 'İstanbul',
-      'district': 'Maltepe',
-    },
-  ];
-
-  List<Map<String, dynamic>> get _filteredMatches => _matches.where((m) {
-        if (_selectedCity != null && m['city'] != _selectedCity) return false;
-        if (_selectedDistrict != null && m['district'] != _selectedDistrict) return false;
-        return true;
-      }).toList();
-
   @override
   void initState() {
     super.initState();
     _loadCityData();
+    _loadDefaultCityAndFetch();
   }
 
   Future<void> _loadCityData() async {
     final raw = await rootBundle.loadString('lib/data/city.json');
     final list = jsonDecode(raw) as List;
     if (mounted) setState(() => _cityData = list.cast<Map<String, dynamic>>());
+  }
+
+  Future<void> _loadDefaultCityAndFetch() async {
+    final profile = await AuthService.getProfile();
+    if (mounted && profile != null) {
+      final city = profile['city'] as String?;
+      if (city != null && city.isNotEmpty) {
+        setState(() => _selectedCity = city);
+      }
+    }
+    await _fetchMatches();
+  }
+
+  Future<void> _fetchMatches() async {
+    if (mounted) setState(() { _matchesLoading = true; _matchesError = null; });
+    final result = await AuthService.getMatches(
+      city: _selectedCity,
+      district: _selectedDistrict,
+    );
+    if (!mounted) return;
+    if (result.error != null && result.error!.startsWith('[401]')) {
+      await AuthService.logout();
+      if (!mounted) return;
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const LoginPage()),
+        (_) => false,
+      );
+      return;
+    }
+    setState(() {
+      _matches = result.matches;
+      _matchesError = result.error;
+      _matchesLoading = false;
+    });
   }
 
   String _formatDate(DateTime date) {
@@ -140,6 +137,17 @@ class _HomePageState extends State<_HomePage> {
     final h = date.hour.toString().padLeft(2, '0');
     final m = date.minute.toString().padLeft(2, '0');
     return '${days[date.weekday - 1]}, ${date.day} ${months[date.month]} - $h:$m';
+  }
+
+  DateTime _parseMatchDate(Map<String, dynamic> match) {
+    final dateStr = match['date'].toString().substring(0, 10);
+    final timeStr = match['time'].toString().substring(0, 5);
+    final d = dateStr.split('-');
+    final t = timeStr.split(':');
+    return DateTime(
+      int.parse(d[0]), int.parse(d[1]), int.parse(d[2]),
+      int.parse(t[0]), int.parse(t[1]),
+    );
   }
 
   Color _skillColor(String level) {
@@ -260,10 +268,13 @@ class _HomePageState extends State<_HomePage> {
               hint: 'İl',
               value: _selectedCity,
               items: _cities,
-              onChanged: (v) => setState(() {
-                _selectedCity = v;
-                _selectedDistrict = null;
-              }),
+              onChanged: (v) {
+                setState(() {
+                  _selectedCity = v;
+                  _selectedDistrict = null;
+                });
+                _fetchMatches();
+              },
             ),
           ),
           const SizedBox(width: 10),
@@ -273,7 +284,10 @@ class _HomePageState extends State<_HomePage> {
               value: _selectedDistrict,
               items: _districts,
               enabled: _selectedCity != null,
-              onChanged: (v) => setState(() => _selectedDistrict = v),
+              onChanged: (v) {
+                setState(() => _selectedDistrict = v);
+                _fetchMatches();
+              },
             ),
           ),
         ],
@@ -329,8 +343,39 @@ class _HomePageState extends State<_HomePage> {
   }
 
   Widget _buildList() {
-    final matches = _filteredMatches;
-    if (matches.isEmpty) {
+    if (_matchesLoading) {
+      return const Center(child: CircularProgressIndicator(color: Color(0xFF4A7A4A)));
+    }
+
+    if (_matchesError != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                _matchesError!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Color(0xFF8A8A8A), fontSize: 14),
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: _fetchMatches,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF4A7A4A),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                child: const Text('Tekrar Dene'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (_matches.isEmpty) {
       return const Center(
         child: Text(
           'Uygun maç bulunamadı.',
@@ -338,18 +383,19 @@ class _HomePageState extends State<_HomePage> {
         ),
       );
     }
+
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
-      itemCount: matches.length,
+      itemCount: _matches.length,
       separatorBuilder: (_, _) => const SizedBox(height: 12),
-      itemBuilder: (_, i) => _buildMatchCard(matches[i], highlighted: i == 0),
+      itemBuilder: (_, i) => _buildMatchCard(_matches[i], highlighted: i == 0),
     );
   }
 
   Widget _buildMatchCard(Map<String, dynamic> match, {bool highlighted = false}) {
-    final date = match['date'] as DateTime;
-    final current = match['currentPlayers'] as int;
-    final total = match['totalPlayers'] as int;
+    final date = _parseMatchDate(match);
+    final current = match['filledPlayers'] as int;
+    final total = match['requiredPlayers'] as int;
     final level = match['skillLevel'] as String;
 
     return Container(
@@ -419,7 +465,14 @@ class _HomePageState extends State<_HomePage> {
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: current < total ? () {} : null,
+              onPressed: current < total
+                  ? () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => MatchDetailPage(match: match),
+                        ),
+                      )
+                  : null,
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF4A7A4A),
                 foregroundColor: Colors.white,

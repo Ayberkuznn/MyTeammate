@@ -99,7 +99,10 @@ async function getMatches({ city, district } = {}) {
   const cleanDistrict = typeof district === 'string' ? district.trim() : null;
 
   const params = [];
-  const conditions = [`m.status = 'active'`, `m."Date" >= CURRENT_DATE`];
+  const conditions = [
+    `m.status = 'active'`,
+    `(m."Date" + m."Time") > NOW() AT TIME ZONE 'Europe/Istanbul'`,
+  ];
 
   if (cleanCity) {
     params.push(cleanCity);
@@ -118,8 +121,8 @@ async function getMatches({ city, district } = {}) {
        f.field_name,
        f.city,
        f.district,
-       m."Date"                               AS date,
-       m."Time"                               AS time,
+       TO_CHAR(m."Date", 'YYYY-MM-DD')        AS date,
+       TO_CHAR(m."Time", 'HH24:MI')           AS time,
        m.required_players,
        COALESCE(SUM(mr.filled_count), 0)::int AS filled_players,
        m.min_point_required,
