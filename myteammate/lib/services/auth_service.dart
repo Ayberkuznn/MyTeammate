@@ -163,6 +163,24 @@ class AuthService {
     return AuthResult(success: false, error: body['error'] as String? ?? 'Doğrulama başarısız.');
   }
 
+  static Future<Map<String, dynamic>?> getMatchDetail(int matchId) async {
+    final token = await _storage.read(key: 'access_token');
+    if (token == null) return null;
+
+    final response = await http.get(
+      Uri.parse('$_baseUrl/api/match/$matchId'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    }
+    return null;
+  }
+
   static Future<void> logout() async {
     await _storage.delete(key: 'access_token');
     await _storage.delete(key: 'refresh_token');

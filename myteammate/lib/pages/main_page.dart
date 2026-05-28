@@ -469,7 +469,7 @@ class _HomePageState extends State<_HomePage> {
                   ? () => Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (_) => MatchDetailPage(match: match),
+                          builder: (_) => MatchDetailPage(matchId: match['matchId'] as int),
                         ),
                       )
                   : null,

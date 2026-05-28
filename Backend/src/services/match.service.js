@@ -156,4 +156,62 @@ async function getMatches({ city, district } = {}) {
   };
 }
 
-module.exports = { createMatch, getMatches };
+async function getMatchById(matchId) {
+  const id = Number(matchId);
+  if (!Number.isInteger(id) || id < 1) {
+    return { status: 400, body: { error: 'Geçersiz maç ID.' } };
+  }
+
+  const result = await pool.query(
+    `SELECT
+       m.match_id,
+       f.field_name,
+       f.city,
+       f.district,
+       TO_CHAR(m."Date", 'YYYY-MM-DD')        AS date,
+       TO_CHAR(m."Time", 'HH24:MI')           AS time,
+       m.required_players,
+       COALESCE(SUM(mr.filled_count), 0)::int AS filled_players,
+       m.min_point_required,
+       m.price_per_person,
+       m.status,
+       u."Name"                               AS creator_name,
+       u."Surname"                            AS creator_surname,
+       u.avg_rating                           AS creator_rating
+     FROM "Match" m
+     JOIN "Field" f  ON m.field_id     = f.field_id
+     JOIN "User"  u  ON m."Creator_id" = u.user_id
+     LEFT JOIN "Match_req" mr ON m.match_id = mr.match_id
+     WHERE m.match_id = $1
+     GROUP BY m.match_id, f.field_name, f.city, f.district,
+              u."Name", u."Surname", u.avg_rating`,
+    [id],
+  );
+
+  if (result.rows.length === 0) {
+    return { status: 404, body: { error: 'Maç bulunamadı.' } };
+  }
+
+  const r = result.rows[0];
+  const skillMap = { 1: 'Başlangıç', 2: 'Orta Seviye', 3: 'İleri Seviye' };
+
+  return {
+    status: 200,
+    body: {
+      matchId:        r.match_id,
+      fieldName:      r.field_name,
+      city:           r.city,
+      district:       r.district,
+      date:           r.date,
+      time:           r.time,
+      requiredPlayers: r.required_players,
+      filledPlayers:  r.filled_players,
+      skillLevel:     skillMap[r.min_point_required] ?? 'Orta Seviye',
+      pricePerPerson: Number(r.price_per_person),
+      creatorName:    `${r.creator_name} ${r.creator_surname}`.toUpperCase(),
+      creatorRating:  parseFloat(r.creator_rating) || 0,
+    },
+  };
+}
+
+module.exports = { createMatch, getMatches, getMatchById };
