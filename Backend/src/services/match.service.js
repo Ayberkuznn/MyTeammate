@@ -162,56 +162,132 @@ async function getMatchById(matchId) {
     return { status: 400, body: { error: 'Geçersiz maç ID.' } };
   }
 
-  const result = await pool.query(
-    `SELECT
-       m.match_id,
-       f.field_name,
-       f.city,
-       f.district,
-       TO_CHAR(m."Date", 'YYYY-MM-DD')        AS date,
-       TO_CHAR(m."Time", 'HH24:MI')           AS time,
-       m.required_players,
-       COALESCE(SUM(mr.filled_count), 0)::int AS filled_players,
-       m.min_point_required,
-       m.price_per_person,
-       m.status,
-       u."Name"                               AS creator_name,
-       u."Surname"                            AS creator_surname,
-       u.avg_rating                           AS creator_rating
-     FROM "Match" m
-     JOIN "Field" f  ON m.field_id     = f.field_id
-     JOIN "User"  u  ON m."Creator_id" = u.user_id
-     LEFT JOIN "Match_req" mr ON m.match_id = mr.match_id
-     WHERE m.match_id = $1
-     GROUP BY m.match_id, f.field_name, f.city, f.district,
-              u."Name", u."Surname", u.avg_rating`,
-    [id],
-  );
+  const [matchResult, posResult] = await Promise.all([
+    pool.query(
+      `SELECT
+         m.match_id,
+         f.field_name,
+         f.city,
+         f.district,
+         TO_CHAR(m."Date", 'YYYY-MM-DD')        AS date,
+         TO_CHAR(m."Time", 'HH24:MI')           AS time,
+         m.required_players,
+         COALESCE(SUM(mr.filled_count), 0)::int AS filled_players,
+         m.min_point_required,
+         m.price_per_person,
+         m.status,
+         u."Name"                               AS creator_name,
+         u."Surname"                            AS creator_surname,
+         u.avg_rating                           AS creator_rating
+       FROM "Match" m
+       JOIN "Field" f  ON m.field_id     = f.field_id
+       JOIN "User"  u  ON m."Creator_id" = u.user_id
+       LEFT JOIN "Match_req" mr ON m.match_id = mr.match_id
+       WHERE m.match_id = $1
+       GROUP BY m.match_id, f.field_name, f.city, f.district,
+                u."Name", u."Surname", u.avg_rating`,
+      [id],
+    ),
+    pool.query(
+      `SELECT position, req_count, filled_count
+       FROM "Match_req"
+       WHERE match_id = $1
+       ORDER BY log_id`,
+      [id],
+    ),
+  ]);
 
-  if (result.rows.length === 0) {
+  if (matchResult.rows.length === 0) {
     return { status: 404, body: { error: 'Maç bulunamadı.' } };
   }
 
-  const r = result.rows[0];
+  const r = matchResult.rows[0];
   const skillMap = { 1: 'Başlangıç', 2: 'Orta Seviye', 3: 'İleri Seviye' };
+
+  const positions = posResult.rows.map((p) => ({
+    position:  p.position,
+    required:  p.req_count,
+    filled:    p.filled_count,
+    available: p.req_count - p.filled_count,
+  }));
 
   return {
     status: 200,
     body: {
-      matchId:        r.match_id,
-      fieldName:      r.field_name,
-      city:           r.city,
-      district:       r.district,
-      date:           r.date,
-      time:           r.time,
+      matchId:         r.match_id,
+      fieldName:       r.field_name,
+      city:            r.city,
+      district:        r.district,
+      date:            r.date,
+      time:            r.time,
       requiredPlayers: r.required_players,
-      filledPlayers:  r.filled_players,
-      skillLevel:     skillMap[r.min_point_required] ?? 'Orta Seviye',
-      pricePerPerson: Number(r.price_per_person),
-      creatorName:    `${r.creator_name} ${r.creator_surname}`.toUpperCase(),
-      creatorRating:  parseFloat(r.creator_rating) || 0,
+      filledPlayers:   r.filled_players,
+      skillLevel:      skillMap[r.min_point_required] ?? 'Orta Seviye',
+      pricePerPerson:  Number(r.price_per_person),
+      creatorName:     `${r.creator_name} ${r.creator_surname}`.toUpperCase(),
+      creatorRating:   parseFloat(r.creator_rating) || 0,
+      positions,
     },
   };
 }
 
-module.exports = { createMatch, getMatches, getMatchById };
+async function joinMatch(userId, matchId) {
+  const id = Number(matchId);
+  if (!Number.isInteger(id) || id < 1) {
+    return { status: 400, body: { error: 'Geçersiz maç ID.' } };
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const matchRow = await client.query(
+      `SELECT status, required_players,
+              COALESCE(SUM(mr.filled_count), 0)::int AS filled
+       FROM "Match" m
+       LEFT JOIN "Match_req" mr ON m.match_id = mr.match_id
+       WHERE m.match_id = $1
+       GROUP BY m.match_id`,
+      [id],
+    );
+    if (matchRow.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return { status: 404, body: { error: 'Maç bulunamadı.' } };
+    }
+    const { status, required_players, filled } = matchRow.rows[0];
+    if (status !== 'active') {
+      await client.query('ROLLBACK');
+      return { status: 400, body: { error: 'Bu maça katılım mümkün değil.' } };
+    }
+    if (filled >= required_players) {
+      await client.query('ROLLBACK');
+      return { status: 400, body: { error: 'Maç kadrosu dolu.' } };
+    }
+
+    const existing = await client.query(
+      `SELECT log_id FROM "Position_request"
+       WHERE match_id = $1 AND user_id = $2 AND status != 2`,
+      [id, userId],
+    );
+    if (existing.rows.length > 0) {
+      await client.query('ROLLBACK');
+      return { status: 409, body: { error: 'Bu maça zaten katılım isteği gönderildi.' } };
+    }
+
+    await client.query(
+      `INSERT INTO "Position_request" (match_id, user_id, position_applied, status)
+       VALUES ($1, $2, 'Belirsiz', 0)`,
+      [id, userId],
+    );
+
+    await client.query('COMMIT');
+    return { status: 200, body: { message: 'Katılım isteği başarıyla gönderildi.' } };
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+module.exports = { createMatch, getMatches, getMatchById, joinMatch };

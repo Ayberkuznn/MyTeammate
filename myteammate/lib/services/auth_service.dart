@@ -163,6 +163,23 @@ class AuthService {
     return AuthResult(success: false, error: body['error'] as String? ?? 'Doğrulama başarısız.');
   }
 
+  static Future<AuthResult> joinMatch(int matchId) async {
+    final token = await _storage.read(key: 'access_token');
+    if (token == null) return const AuthResult(success: false, error: 'Oturum bulunamadı.');
+
+    final response = await http.post(
+      Uri.parse('$_baseUrl/api/match/$matchId/join'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    if (response.statusCode == 200) return const AuthResult(success: true);
+    return AuthResult(success: false, error: body['error'] as String? ?? 'Bir hata oluştu.');
+  }
+
   static Future<Map<String, dynamic>?> getMatchDetail(int matchId) async {
     final token = await _storage.read(key: 'access_token');
     if (token == null) return null;

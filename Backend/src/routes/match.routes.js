@@ -25,6 +25,16 @@ router.get('/:id', requireAuth, async (req, res) => {
   }
 });
 
+router.post('/:id/join', requireAuth, async (req, res) => {
+  try {
+    const { status, body } = await matchService.joinMatch(req.user.userId, req.params.id);
+    res.status(status).json(body);
+  } catch (err) {
+    console.error('Join match error:', err);
+    res.status(500).json({ error: 'Sunucu hatası.' });
+  }
+});
+
 router.post('/', requireAuth, async (req, res) => {
   try {
     const { status, body } = await matchService.createMatch(req.user.userId, req.body);

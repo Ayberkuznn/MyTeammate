@@ -265,6 +265,62 @@ class _MatchDetailPageState extends State<MatchDetailPage> {
     );
   }
 
+  bool _joining = false;
+
+  Future<void> _joinMatch() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Maça Katıl', style: TextStyle(fontWeight: FontWeight.w800)),
+        content: const Text('Bu maça katılım isteği göndermek istiyor musunuz?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Vazgeç', style: TextStyle(color: Color(0xFF888888))),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF4A8A3A),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              elevation: 0,
+            ),
+            child: const Text('Katıl'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _joining = true);
+    final result = await AuthService.joinMatch(widget.matchId);
+    if (!mounted) return;
+    setState(() => _joining = false);
+
+    if (result.success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Katılım isteğin başarıyla gönderildi!'),
+          backgroundColor: const Color(0xFF4A8A3A),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+      Navigator.pop(context);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(result.error ?? 'Bir hata oluştu.'),
+          backgroundColor: const Color(0xFFAA3A3A),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+    }
+  }
+
   Widget _buildJoinButton() {
     final current = _match!['filledPlayers'] as int;
     final total   = _match!['requiredPlayers'] as int;
@@ -273,7 +329,7 @@ class _MatchDetailPageState extends State<MatchDetailPage> {
     return SizedBox(
       height: 56,
       child: ElevatedButton(
-        onPressed: isFull ? null : () {},
+        onPressed: (isFull || _joining) ? null : _joinMatch,
         style: ElevatedButton.styleFrom(
           backgroundColor: const Color(0xFF4A8A3A),
           foregroundColor: Colors.white,
@@ -281,10 +337,16 @@ class _MatchDetailPageState extends State<MatchDetailPage> {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
           elevation: 0,
         ),
-        child: Text(
-          isFull ? 'DOLU' : 'KATIL',
-          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, letterSpacing: 2),
-        ),
+        child: _joining
+            ? const SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
+              )
+            : Text(
+                isFull ? 'DOLU' : 'KATIL',
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, letterSpacing: 2),
+              ),
       ),
     );
   }
