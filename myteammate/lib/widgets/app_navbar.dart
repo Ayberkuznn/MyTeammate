@@ -56,8 +56,8 @@ class AppNavBar extends StatelessWidget {
                     onTap: onTap,
                   ),
                   _NavItem(
-                    icon: Icons.search,
-                    activeIcon: Icons.search,
+                    icon: Icons.sports_soccer_outlined,
+                    activeIcon: Icons.sports_soccer,
                     index: 1,
                     currentIndex: currentIndex,
                     onTap: onTap,

@@ -442,4 +442,50 @@ async function rejectRequest(userId, requestId) {
   return { status: 200, body: { message: 'Katılım isteği reddedildi.' } };
 }
 
-module.exports = { createMatch, getMatches, getMatchById, joinMatch, getMatchRequests, acceptRequest, rejectRequest };
+async function getMyMatches(userId) {
+  const result = await pool.query(
+    `SELECT
+       m.match_id,
+       f.field_name,
+       f.city,
+       f.district,
+       TO_CHAR(m."Date", 'YYYY-MM-DD')  AS date,
+       TO_CHAR(m."Time", 'HH24:MI')     AS time,
+       m.required_players,
+       (SELECT COUNT(*) FROM match_participants mp2 WHERE mp2.match_id = m.match_id)::int AS filled_players,
+       m.min_point_required,
+       m.price_per_person,
+       m.status,
+       (m."Creator_id" = $1)            AS is_creator,
+       mp.position                      AS my_position
+     FROM "Match" m
+     JOIN "Field" f ON m.field_id = f.field_id
+     LEFT JOIN match_participants mp ON mp.match_id = m.match_id AND mp.user_id = $1
+     WHERE m."Creator_id" = $1 OR mp.user_id = $1
+     ORDER BY m."Date" DESC, m."Time" DESC`,
+    [userId],
+  );
+
+  const skillMap = { 1: 'Başlangıç', 2: 'Orta Seviye', 3: 'İleri Seviye' };
+
+  return {
+    status: 200,
+    body: result.rows.map((r) => ({
+      matchId:         r.match_id,
+      fieldName:       r.field_name,
+      city:            r.city,
+      district:        r.district,
+      date:            r.date,
+      time:            r.time,
+      requiredPlayers: r.required_players,
+      filledPlayers:   r.filled_players,
+      skillLevel:      skillMap[r.min_point_required] ?? 'Orta Seviye',
+      pricePerPerson:  Number(r.price_per_person),
+      status:          r.status,
+      isCreator:       r.is_creator,
+      myPosition:      r.my_position ?? null,
+    })),
+  };
+}
+
+module.exports = { createMatch, getMatches, getMatchById, joinMatch, getMatchRequests, acceptRequest, rejectRequest, getMyMatches };

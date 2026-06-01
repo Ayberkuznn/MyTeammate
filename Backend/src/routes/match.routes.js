@@ -15,7 +15,17 @@ router.get('/', requireAuth, async (req, res) => {
   }
 });
 
-// /requests önce gelmeli — aksi hâlde /:id yakalar
+// /my ve /requests önce gelmeli — aksi hâlde /:id yakalar
+router.get('/my', requireAuth, async (req, res) => {
+  try {
+    const { status, body } = await matchService.getMyMatches(req.user.userId);
+    res.status(status).json(body);
+  } catch (err) {
+    console.error('Get my matches error:', err);
+    res.status(500).json({ error: 'Sunucu hatası.' });
+  }
+});
+
 router.get('/requests', requireAuth, async (req, res) => {
   try {
     const { status, body } = await matchService.getMatchRequests(req.user.userId);

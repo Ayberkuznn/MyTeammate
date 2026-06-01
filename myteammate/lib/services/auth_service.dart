@@ -234,6 +234,25 @@ class AuthService {
     return AuthResult(success: false, error: body['error'] as String? ?? 'Bir hata oluştu.');
   }
 
+  static Future<List<Map<String, dynamic>>?> getMyMatches() async {
+    final token = await _storage.read(key: 'access_token');
+    if (token == null) return null;
+
+    final response = await http.get(
+      Uri.parse('$_baseUrl/api/match/my'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+
+    if (response.statusCode == 200) {
+      final list = jsonDecode(response.body) as List;
+      return list.cast<Map<String, dynamic>>();
+    }
+    return null;
+  }
+
   static Future<Map<String, dynamic>?> getMatchDetail(int matchId) async {
     final token = await _storage.read(key: 'access_token');
     if (token == null) return null;

@@ -5,6 +5,7 @@ import 'profile_page.dart';
 import 'create_match_page.dart';
 import 'match_detail_page.dart';
 import 'login_page.dart';
+import 'my_matches_page.dart';
 import 'notifications_page.dart';
 import '../widgets/app_navbar.dart';
 import '../services/auth_service.dart';
@@ -28,8 +29,8 @@ class _MainPageState extends State<MainPage> {
         children: [
           // 0 — Ana Sayfa
           _HomePage(key: _homeKey, onProfileTap: () => setState(() => _navIndex = 4)),
-          // 1 — Arama
-          const Center(child: Text('Arama')),
+          // 1 — Maçlarım
+          const MyMatchesPage(),
           // 2 — Maç Oluştur
           CreateMatchPage(
             onMatchCreated: () {
