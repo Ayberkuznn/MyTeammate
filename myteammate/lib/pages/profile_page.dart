@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import 'edit_profile_page.dart';
+import 'login_page.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -200,6 +201,58 @@ class _ProfilePageState extends State<ProfilePage> {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 32),
             child: _PenaltyCard(penaltyScore: penaltyScore),
+          ),
+
+          const SizedBox(height: 24),
+
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            child: SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () async {
+                  final nav = Navigator.of(context);
+                  final confirmed = await showDialog<bool>(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      title: const Text('Çıkış Yap'),
+                      content: const Text('Hesabından çıkmak istediğine emin misin?'),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx, false),
+                          child: const Text('Vazgeç'),
+                        ),
+                        ElevatedButton(
+                          onPressed: () => Navigator.pop(ctx, true),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFAA3A3A),
+                            foregroundColor: Colors.white,
+                          ),
+                          child: const Text('Çıkış Yap'),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (confirmed != true || !mounted) return;
+                  await AuthService.logout();
+                  if (!mounted) return;
+                  nav.pushAndRemoveUntil(
+                    MaterialPageRoute(builder: (_) => const LoginPage()),
+                    (_) => false,
+                  );
+                },
+                icon: const Icon(Icons.logout, size: 18),
+                label: const Text('Çıkış Yap'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFFAA3A3A),
+                  side: const BorderSide(color: Color(0xFFAA3A3A)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+              ),
+            ),
           ),
 
           const SizedBox(height: 32),

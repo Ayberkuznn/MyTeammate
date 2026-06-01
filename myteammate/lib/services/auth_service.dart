@@ -180,6 +180,59 @@ class AuthService {
     return AuthResult(success: false, error: body['error'] as String? ?? 'Bir hata oluştu.');
   }
 
+  static Future<List<Map<String, dynamic>>?> getMatchRequests() async {
+    final token = await _storage.read(key: 'access_token');
+    if (token == null) return null;
+
+    final response = await http.get(
+      Uri.parse('$_baseUrl/api/match/requests'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+
+    if (response.statusCode == 200) {
+      final list = jsonDecode(response.body) as List;
+      return list.cast<Map<String, dynamic>>();
+    }
+    return null;
+  }
+
+  static Future<AuthResult> acceptRequest(int requestId) async {
+    final token = await _storage.read(key: 'access_token');
+    if (token == null) return const AuthResult(success: false, error: 'Oturum bulunamadı.');
+
+    final response = await http.post(
+      Uri.parse('$_baseUrl/api/match/requests/$requestId/accept'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    if (response.statusCode == 200) return const AuthResult(success: true);
+    return AuthResult(success: false, error: body['error'] as String? ?? 'Bir hata oluştu.');
+  }
+
+  static Future<AuthResult> rejectRequest(int requestId) async {
+    final token = await _storage.read(key: 'access_token');
+    if (token == null) return const AuthResult(success: false, error: 'Oturum bulunamadı.');
+
+    final response = await http.post(
+      Uri.parse('$_baseUrl/api/match/requests/$requestId/reject'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    if (response.statusCode == 200) return const AuthResult(success: true);
+    return AuthResult(success: false, error: body['error'] as String? ?? 'Bir hata oluştu.');
+  }
+
   static Future<Map<String, dynamic>?> getMatchDetail(int matchId) async {
     final token = await _storage.read(key: 'access_token');
     if (token == null) return null;

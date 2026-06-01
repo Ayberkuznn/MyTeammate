@@ -5,6 +5,7 @@ import 'profile_page.dart';
 import 'create_match_page.dart';
 import 'match_detail_page.dart';
 import 'login_page.dart';
+import 'notifications_page.dart';
 import '../widgets/app_navbar.dart';
 import '../services/auth_service.dart';
 
@@ -33,7 +34,7 @@ class _MainPageState extends State<MainPage> {
             onMatchCreated: () => setState(() => _navIndex = 0),
           ),
           // 3 — Bildirimler
-          const Center(child: Text('Bildirimler')),
+          const NotificationsPage(),
           // 4 — Profil
           const ProfilePage(),
         ],

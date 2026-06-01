@@ -15,6 +15,37 @@ router.get('/', requireAuth, async (req, res) => {
   }
 });
 
+// /requests önce gelmeli — aksi hâlde /:id yakalar
+router.get('/requests', requireAuth, async (req, res) => {
+  try {
+    const { status, body } = await matchService.getMatchRequests(req.user.userId);
+    res.status(status).json(body);
+  } catch (err) {
+    console.error('Get requests error:', err);
+    res.status(500).json({ error: 'Sunucu hatası.' });
+  }
+});
+
+router.post('/requests/:id/accept', requireAuth, async (req, res) => {
+  try {
+    const { status, body } = await matchService.acceptRequest(req.user.userId, req.params.id);
+    res.status(status).json(body);
+  } catch (err) {
+    console.error('Accept request error:', err);
+    res.status(500).json({ error: 'Sunucu hatası.' });
+  }
+});
+
+router.post('/requests/:id/reject', requireAuth, async (req, res) => {
+  try {
+    const { status, body } = await matchService.rejectRequest(req.user.userId, req.params.id);
+    res.status(status).json(body);
+  } catch (err) {
+    console.error('Reject request error:', err);
+    res.status(500).json({ error: 'Sunucu hatası.' });
+  }
+});
+
 router.get('/:id', requireAuth, async (req, res) => {
   try {
     const { status, body } = await matchService.getMatchById(req.params.id);

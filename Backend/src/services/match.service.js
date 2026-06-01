@@ -6,7 +6,6 @@ const TIME_RE = /^\d{2}:\d{2}$/;
 async function createMatch(creatorId, { fieldId, date, time, requiredPlayers, minPointRequired, pricePerPerson, positions }) {
   const errors = [];
 
-  // --- temel alan kontrolleri ---
   if (!fieldId || !Number.isInteger(Number(fieldId)) || Number(fieldId) < 1)
     errors.push('Geçersiz saha.');
 
@@ -27,7 +26,6 @@ async function createMatch(creatorId, { fieldId, date, time, requiredPlayers, mi
   if (typeof pricePerPerson !== 'number' || pricePerPerson < 0)
     errors.push('Ücret geçersiz.');
 
-  // --- pozisyon kontrolleri ---
   if (!positions || typeof positions !== 'object' || Array.isArray(positions)) {
     errors.push('Pozisyon bilgisi eksik.');
   } else {
@@ -45,7 +43,6 @@ async function createMatch(creatorId, { fieldId, date, time, requiredPlayers, mi
 
   if (errors.length > 0) return { status: 400, body: { errors } };
 
-  // --- saha varlık kontrolü ---
   const fieldCheck = await pool.query(
     `SELECT field_id FROM "Field" WHERE field_id = $1`,
     [Number(fieldId)],
@@ -121,18 +118,16 @@ async function getMatches({ city, district } = {}) {
        f.field_name,
        f.city,
        f.district,
-       TO_CHAR(m."Date", 'YYYY-MM-DD')        AS date,
-       TO_CHAR(m."Time", 'HH24:MI')           AS time,
+       TO_CHAR(m."Date", 'YYYY-MM-DD') AS date,
+       TO_CHAR(m."Time", 'HH24:MI')    AS time,
        m.required_players,
-       COALESCE(SUM(mr.filled_count), 0)::int AS filled_players,
+       (SELECT COUNT(*) FROM match_participants mp WHERE mp.match_id = m.match_id)::int AS filled_players,
        m.min_point_required,
        m.price_per_person,
        m.status
      FROM "Match" m
      JOIN "Field" f ON m.field_id = f.field_id
-     LEFT JOIN "Match_req" mr ON m.match_id = mr.match_id
      WHERE ${where}
-     GROUP BY m.match_id, f.field_name, f.city, f.district
      ORDER BY m."Date" ASC, m."Time" ASC`,
     params,
   );
@@ -142,25 +137,24 @@ async function getMatches({ city, district } = {}) {
   return {
     status: 200,
     body: result.rows.map((r) => ({
-      matchId:        r.match_id,
-      fieldName:      r.field_name,
-      city:           r.city,
-      district:       r.district,
-      date:           r.date,
-      time:           r.time,
+      matchId:         r.match_id,
+      fieldName:       r.field_name,
+      city:            r.city,
+      district:        r.district,
+      date:            r.date,
+      time:            r.time,
       requiredPlayers: r.required_players,
-      filledPlayers:  r.filled_players,
-      skillLevel:     skillMap[r.min_point_required] ?? 'Orta Seviye',
-      pricePerPerson: Number(r.price_per_person),
+      filledPlayers:   r.filled_players,
+      skillLevel:      skillMap[r.min_point_required] ?? 'Orta Seviye',
+      pricePerPerson:  Number(r.price_per_person),
     })),
   };
 }
 
 async function getMatchById(matchId) {
   const id = Number(matchId);
-  if (!Number.isInteger(id) || id < 1) {
+  if (!Number.isInteger(id) || id < 1)
     return { status: 400, body: { error: 'Geçersiz maç ID.' } };
-  }
 
   const [matchResult, posResult] = await Promise.all([
     pool.query(
@@ -169,23 +163,20 @@ async function getMatchById(matchId) {
          f.field_name,
          f.city,
          f.district,
-         TO_CHAR(m."Date", 'YYYY-MM-DD')        AS date,
-         TO_CHAR(m."Time", 'HH24:MI')           AS time,
+         TO_CHAR(m."Date", 'YYYY-MM-DD') AS date,
+         TO_CHAR(m."Time", 'HH24:MI')    AS time,
          m.required_players,
-         COALESCE(SUM(mr.filled_count), 0)::int AS filled_players,
+         (SELECT COUNT(*) FROM match_participants mp WHERE mp.match_id = m.match_id)::int AS filled_players,
          m.min_point_required,
          m.price_per_person,
          m.status,
-         u."Name"                               AS creator_name,
-         u."Surname"                            AS creator_surname,
-         u.avg_rating                           AS creator_rating
+         u."Name"     AS creator_name,
+         u."Surname"  AS creator_surname,
+         u.avg_rating AS creator_rating
        FROM "Match" m
-       JOIN "Field" f  ON m.field_id     = f.field_id
-       JOIN "User"  u  ON m."Creator_id" = u.user_id
-       LEFT JOIN "Match_req" mr ON m.match_id = mr.match_id
-       WHERE m.match_id = $1
-       GROUP BY m.match_id, f.field_name, f.city, f.district,
-                u."Name", u."Surname", u.avg_rating`,
+       JOIN "Field" f ON m.field_id     = f.field_id
+       JOIN "User"  u ON m."Creator_id" = u.user_id
+       WHERE m.match_id = $1`,
       [id],
     ),
     pool.query(
@@ -197,9 +188,8 @@ async function getMatchById(matchId) {
     ),
   ]);
 
-  if (matchResult.rows.length === 0) {
+  if (matchResult.rows.length === 0)
     return { status: 404, body: { error: 'Maç bulunamadı.' } };
-  }
 
   const r = matchResult.rows[0];
   const skillMap = { 1: 'Başlangıç', 2: 'Orta Seviye', 3: 'İleri Seviye' };
@@ -233,33 +223,33 @@ async function getMatchById(matchId) {
 
 async function joinMatch(userId, matchId) {
   const id = Number(matchId);
-  if (!Number.isInteger(id) || id < 1) {
+  if (!Number.isInteger(id) || id < 1)
     return { status: 400, body: { error: 'Geçersiz maç ID.' } };
-  }
 
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
 
     const matchRow = await client.query(
-      `SELECT status, required_players,
-              COALESCE(SUM(mr.filled_count), 0)::int AS filled
-       FROM "Match" m
-       LEFT JOIN "Match_req" mr ON m.match_id = mr.match_id
-       WHERE m.match_id = $1
-       GROUP BY m.match_id`,
+      `SELECT status, required_players FROM "Match" WHERE match_id = $1`,
       [id],
     );
     if (matchRow.rows.length === 0) {
       await client.query('ROLLBACK');
       return { status: 404, body: { error: 'Maç bulunamadı.' } };
     }
-    const { status, required_players, filled } = matchRow.rows[0];
+
+    const { status, required_players } = matchRow.rows[0];
     if (status !== 'active') {
       await client.query('ROLLBACK');
       return { status: 400, body: { error: 'Bu maça katılım mümkün değil.' } };
     }
-    if (filled >= required_players) {
+
+    const countRow = await client.query(
+      `SELECT COUNT(*) AS cnt FROM match_participants WHERE match_id = $1`,
+      [id],
+    );
+    if (parseInt(countRow.rows[0].cnt) >= required_players) {
       await client.query('ROLLBACK');
       return { status: 400, body: { error: 'Maç kadrosu dolu.' } };
     }
@@ -290,4 +280,131 @@ async function joinMatch(userId, matchId) {
   }
 }
 
-module.exports = { createMatch, getMatches, getMatchById, joinMatch };
+async function getMatchRequests(userId) {
+  const result = await pool.query(
+    `SELECT
+       pr.log_id                        AS request_id,
+       pr.match_id,
+       pr.status,
+       pr.applied_at,
+       u."Name"                         AS user_name,
+       u."Surname"                      AS user_surname,
+       u.avg_rating                     AS user_rating,
+       f.field_name,
+       TO_CHAR(m."Date", 'YYYY-MM-DD')  AS match_date,
+       TO_CHAR(m."Time", 'HH24:MI')     AS match_time
+     FROM "Position_request" pr
+     JOIN "Match" m ON pr.match_id = m.match_id
+     JOIN "User"  u ON pr.user_id  = u.user_id
+     JOIN "Field" f ON m.field_id  = f.field_id
+     WHERE m."Creator_id" = $1
+       AND (m."Date" + m."Time") > NOW() AT TIME ZONE 'Europe/Istanbul'
+     ORDER BY pr.applied_at DESC`,
+    [userId],
+  );
+
+  return {
+    status: 200,
+    body: result.rows.map((r) => ({
+      requestId:  r.request_id,
+      matchId:    r.match_id,
+      status:     r.status,
+      appliedAt:  r.applied_at,
+      userName:   `${r.user_name} ${r.user_surname}`.toUpperCase(),
+      userRating: parseFloat(r.user_rating) || 0,
+      fieldName:  r.field_name,
+      matchDate:  r.match_date,
+      matchTime:  r.match_time,
+    })),
+  };
+}
+
+async function acceptRequest(userId, requestId) {
+  const id = Number(requestId);
+  if (!Number.isInteger(id) || id < 1)
+    return { status: 400, body: { error: 'Geçersiz istek ID.' } };
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const reqRow = await client.query(
+      `SELECT pr.log_id, pr.match_id, pr.user_id, pr.status, m."Creator_id", m.required_players
+       FROM "Position_request" pr
+       JOIN "Match" m ON pr.match_id = m.match_id
+       WHERE pr.log_id = $1`,
+      [id],
+    );
+    if (reqRow.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return { status: 404, body: { error: 'İstek bulunamadı.' } };
+    }
+
+    const req = reqRow.rows[0];
+    if (req.Creator_id !== userId) {
+      await client.query('ROLLBACK');
+      return { status: 403, body: { error: 'Bu işlem için yetkiniz yok.' } };
+    }
+    if (req.status !== 0) {
+      await client.query('ROLLBACK');
+      return { status: 400, body: { error: 'Bu istek zaten işleme alındı.' } };
+    }
+
+    const countRow = await client.query(
+      `SELECT COUNT(*) AS cnt FROM match_participants WHERE match_id = $1`,
+      [req.match_id],
+    );
+    if (parseInt(countRow.rows[0].cnt) >= req.required_players) {
+      await client.query('ROLLBACK');
+      return { status: 400, body: { error: 'Maç kadrosu dolu.' } };
+    }
+
+    await client.query(
+      `UPDATE "Position_request" SET status = 1, response_at = NOW() WHERE log_id = $1`,
+      [id],
+    );
+    await client.query(
+      `INSERT INTO match_participants (match_id, user_id, position, attendance_status)
+       VALUES ($1, $2, 'Belirsiz', 'pending')`,
+      [req.match_id, req.user_id],
+    );
+
+    await client.query('COMMIT');
+    return { status: 200, body: { message: 'Katılım isteği kabul edildi.' } };
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+async function rejectRequest(userId, requestId) {
+  const id = Number(requestId);
+  if (!Number.isInteger(id) || id < 1)
+    return { status: 400, body: { error: 'Geçersiz istek ID.' } };
+
+  const reqRow = await pool.query(
+    `SELECT pr.log_id, pr.status, m."Creator_id"
+     FROM "Position_request" pr
+     JOIN "Match" m ON pr.match_id = m.match_id
+     WHERE pr.log_id = $1`,
+    [id],
+  );
+  if (reqRow.rows.length === 0)
+    return { status: 404, body: { error: 'İstek bulunamadı.' } };
+
+  const req = reqRow.rows[0];
+  if (req.Creator_id !== userId)
+    return { status: 403, body: { error: 'Bu işlem için yetkiniz yok.' } };
+  if (req.status !== 0)
+    return { status: 400, body: { error: 'Bu istek zaten işleme alındı.' } };
+
+  await pool.query(
+    `UPDATE "Position_request" SET status = 2, response_at = NOW() WHERE log_id = $1`,
+    [id],
+  );
+  return { status: 200, body: { message: 'Katılım isteği reddedildi.' } };
+}
+
+module.exports = { createMatch, getMatches, getMatchById, joinMatch, getMatchRequests, acceptRequest, rejectRequest };
