@@ -268,34 +268,117 @@ class _MatchDetailPageState extends State<MatchDetailPage> {
   bool _joining = false;
 
   Future<void> _joinMatch() async {
-    final confirmed = await showDialog<bool>(
+    final positions = (_match!['positions'] as List)
+        .map((p) => p as Map<String, dynamic>)
+        .where((p) => (p['available'] as int) > 0)
+        .toList();
+
+    String? selectedPosition;
+
+    final chosenPosition = await showDialog<String>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Maça Katıl', style: TextStyle(fontWeight: FontWeight.w800)),
-        content: const Text('Bu maça katılım isteği göndermek istiyor musunuz?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Vazgeç', style: TextStyle(color: Color(0xFF888888))),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text(
+            'Pozisyon Seç',
+            style: TextStyle(fontWeight: FontWeight.w800),
           ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF4A8A3A),
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              elevation: 0,
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Hangi pozisyonda oynamak istiyorsun?',
+                style: TextStyle(fontSize: 14, color: Color(0xFF555555)),
+              ),
+              const SizedBox(height: 16),
+              ...positions.map((p) {
+                final pos       = p['position'] as String;
+                final available = p['available'] as int;
+                final isSelected = selectedPosition == pos;
+                return GestureDetector(
+                  onTap: () => setDialogState(() => selectedPosition = pos),
+                  child: Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 13),
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? const Color(0xFF4A8A3A)
+                          : const Color(0xFFF2F2F2),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      children: [
+                        Text(
+                          pos,
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 15,
+                            color: isSelected
+                                ? Colors.white
+                                : const Color(0xFF1A1A1A),
+                          ),
+                        ),
+                        const Spacer(),
+                        Text(
+                          '$available boş',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: isSelected
+                                ? Colors.white70
+                                : const Color(0xFF7A7A7A),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Icon(
+                          isSelected
+                              ? Icons.check_circle
+                              : Icons.radio_button_unchecked,
+                          size: 18,
+                          color: isSelected
+                              ? Colors.white
+                              : const Color(0xFFBBBBBB),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text(
+                'Vazgeç',
+                style: TextStyle(color: Color(0xFF888888)),
+              ),
             ),
-            child: const Text('Katıl'),
-          ),
-        ],
+            ElevatedButton(
+              onPressed: selectedPosition != null
+                  ? () => Navigator.pop(ctx, selectedPosition)
+                  : null,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF4A8A3A),
+                foregroundColor: Colors.white,
+                disabledBackgroundColor: const Color(0xFFCCCCCC),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+                elevation: 0,
+              ),
+              child: const Text('Katıl'),
+            ),
+          ],
+        ),
       ),
     );
-    if (confirmed != true || !mounted) return;
+
+    if (chosenPosition == null || !mounted) return;
 
     setState(() => _joining = true);
-    final result = await AuthService.joinMatch(widget.matchId);
+    final result = await AuthService.joinMatch(widget.matchId, chosenPosition);
     if (!mounted) return;
     setState(() => _joining = false);
 

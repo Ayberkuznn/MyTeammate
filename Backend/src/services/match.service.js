@@ -221,10 +221,15 @@ async function getMatchById(matchId) {
   };
 }
 
-async function joinMatch(userId, matchId) {
+async function joinMatch(userId, matchId, position) {
   const id = Number(matchId);
   if (!Number.isInteger(id) || id < 1)
     return { status: 400, body: { error: 'Geçersiz maç ID.' } };
+
+  if (!position || typeof position !== 'string' || !position.trim())
+    return { status: 400, body: { error: 'Pozisyon seçimi zorunludur.' } };
+
+  const cleanPosition = position.trim();
 
   const client = await pool.connect();
   try {
@@ -243,6 +248,19 @@ async function joinMatch(userId, matchId) {
     if (status !== 'active') {
       await client.query('ROLLBACK');
       return { status: 400, body: { error: 'Bu maça katılım mümkün değil.' } };
+    }
+
+    const posCheck = await client.query(
+      `SELECT req_count, filled_count FROM "Match_req" WHERE match_id = $1 AND position = $2`,
+      [id, cleanPosition],
+    );
+    if (posCheck.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return { status: 400, body: { error: 'Seçilen pozisyon bu maçta mevcut değil.' } };
+    }
+    if (posCheck.rows[0].filled_count >= posCheck.rows[0].req_count) {
+      await client.query('ROLLBACK');
+      return { status: 400, body: { error: 'Bu pozisyon dolu.' } };
     }
 
     const countRow = await client.query(
@@ -266,8 +284,8 @@ async function joinMatch(userId, matchId) {
 
     await client.query(
       `INSERT INTO "Position_request" (match_id, user_id, position_applied, status)
-       VALUES ($1, $2, 'Belirsiz', 0)`,
-      [id, userId],
+       VALUES ($1, $2, $3, 0)`,
+      [id, userId, cleanPosition],
     );
 
     await client.query('COMMIT');
@@ -329,7 +347,7 @@ async function acceptRequest(userId, requestId) {
     await client.query('BEGIN');
 
     const reqRow = await client.query(
-      `SELECT pr.log_id, pr.match_id, pr.user_id, pr.status, m."Creator_id", m.required_players
+      `SELECT pr.log_id, pr.match_id, pr.user_id, pr.status, pr.position_applied, m."Creator_id", m.required_players
        FROM "Position_request" pr
        JOIN "Match" m ON pr.match_id = m.match_id
        WHERE pr.log_id = $1`,
@@ -365,9 +383,26 @@ async function acceptRequest(userId, requestId) {
     );
     await client.query(
       `INSERT INTO match_participants (match_id, user_id, position, attendance_status)
-       VALUES ($1, $2, 'Belirsiz', 'pending')`,
-      [req.match_id, req.user_id],
+       VALUES ($1, $2, $3, 'pending')`,
+      [req.match_id, req.user_id, req.position_applied],
     );
+    await client.query(
+      `UPDATE "Match_req" SET filled_count = filled_count + 1
+       WHERE match_id = $1 AND position = $2`,
+      [req.match_id, req.position_applied],
+    );
+
+    const newCount = parseInt(countRow.rows[0].cnt) + 1;
+    if (newCount >= req.required_players) {
+      await client.query(
+        `UPDATE "Match" SET status = 'full' WHERE match_id = $1`,
+        [req.match_id],
+      );
+      await client.query(
+        `INSERT INTO match_archive (match_id, reason) VALUES ($1, 'full')`,
+        [req.match_id],
+      );
+    }
 
     await client.query('COMMIT');
     return { status: 200, body: { message: 'Katılım isteği kabul edildi.' } };
