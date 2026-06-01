@@ -18,6 +18,7 @@ class MainPage extends StatefulWidget {
 
 class _MainPageState extends State<MainPage> {
   int _navIndex = 0;
+  final _homeKey = GlobalKey<_HomePageState>();
 
   @override
   Widget build(BuildContext context) {
@@ -26,12 +27,15 @@ class _MainPageState extends State<MainPage> {
         index: _navIndex,
         children: [
           // 0 — Ana Sayfa
-          _HomePage(onProfileTap: () => setState(() => _navIndex = 4)),
+          _HomePage(key: _homeKey, onProfileTap: () => setState(() => _navIndex = 4)),
           // 1 — Arama
           const Center(child: Text('Arama')),
           // 2 — Maç Oluştur
           CreateMatchPage(
-            onMatchCreated: () => setState(() => _navIndex = 0),
+            onMatchCreated: () {
+              setState(() => _navIndex = 0);
+              _homeKey.currentState?.refresh();
+            },
           ),
           // 3 — Bildirimler
           const NotificationsPage(),
@@ -41,7 +45,10 @@ class _MainPageState extends State<MainPage> {
       ),
       bottomNavigationBar: AppNavBar(
         currentIndex: _navIndex,
-        onTap: (i) => setState(() => _navIndex = i),
+        onTap: (i) {
+          if (i == 0) _homeKey.currentState?.refresh();
+          setState(() => _navIndex = i);
+        },
       ),
     );
   }
@@ -52,7 +59,7 @@ class _MainPageState extends State<MainPage> {
 class _HomePage extends StatefulWidget {
   final VoidCallback? onProfileTap;
 
-  const _HomePage({this.onProfileTap});
+  const _HomePage({super.key, this.onProfileTap});
 
   @override
   State<_HomePage> createState() => _HomePageState();
@@ -104,6 +111,8 @@ class _HomePageState extends State<_HomePage> {
     }
     await _fetchMatches();
   }
+
+  void refresh() => _fetchMatches();
 
   Future<void> _fetchMatches() async {
     if (mounted) setState(() { _matchesLoading = true; _matchesError = null; });
@@ -472,7 +481,7 @@ class _HomePageState extends State<_HomePage> {
                         MaterialPageRoute(
                           builder: (_) => MatchDetailPage(matchId: match['matchId'] as int),
                         ),
-                      )
+                      ).then((_) => _fetchMatches())
                   : null,
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF4A7A4A),
