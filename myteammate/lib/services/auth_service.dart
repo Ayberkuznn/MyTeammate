@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 
@@ -10,7 +11,8 @@ class AuthResult {
 }
 
 class AuthService {
-  static const String _baseUrl = 'http://10.0.2.2:3000';
+  static final String _baseUrl =
+      kIsWeb ? 'http://localhost:3000' : 'http://10.0.2.2:3000';
   static const _storage = FlutterSecureStorage();
 
   static Future<AuthResult> login(String email, String password) async {
@@ -251,6 +253,53 @@ class AuthService {
       return list.cast<Map<String, dynamic>>();
     }
     return null;
+  }
+
+  static Future<List<Map<String, dynamic>>?> getMatchParticipants(int matchId) async {
+    final token = await _storage.read(key: 'access_token');
+    if (token == null) return null;
+
+    final response = await http.get(
+      Uri.parse('$_baseUrl/api/match/$matchId/participants'),
+      headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
+    );
+
+    if (response.statusCode == 200) {
+      final list = jsonDecode(response.body) as List;
+      return list.cast<Map<String, dynamic>>();
+    }
+    return null;
+  }
+
+  static Future<AuthResult> evaluateMatch(
+      int matchId, List<Map<String, dynamic>> evaluations) async {
+    final token = await _storage.read(key: 'access_token');
+    if (token == null) return const AuthResult(success: false, error: 'Oturum bulunamadı.');
+
+    final response = await http.post(
+      Uri.parse('$_baseUrl/api/match/$matchId/evaluate'),
+      headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
+      body: jsonEncode({'evaluations': evaluations}),
+    );
+
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    if (response.statusCode == 200) return const AuthResult(success: true);
+    return AuthResult(success: false, error: body['error'] as String? ?? 'Bir hata oluştu.');
+  }
+
+  static Future<AuthResult> rateOrganizer(int matchId, int star) async {
+    final token = await _storage.read(key: 'access_token');
+    if (token == null) return const AuthResult(success: false, error: 'Oturum bulunamadı.');
+
+    final response = await http.post(
+      Uri.parse('$_baseUrl/api/match/$matchId/rate-organizer'),
+      headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
+      body: jsonEncode({'star': star}),
+    );
+
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    if (response.statusCode == 200) return const AuthResult(success: true);
+    return AuthResult(success: false, error: body['error'] as String? ?? 'Bir hata oluştu.');
   }
 
   static Future<Map<String, dynamic>?> getMatchDetail(int matchId) async {

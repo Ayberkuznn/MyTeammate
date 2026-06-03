@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
+import 'evaluate_match_page.dart';
 import 'match_detail_page.dart';
 
 class MyMatchesPage extends StatefulWidget {
@@ -171,6 +172,79 @@ class _MyMatchesPageState extends State<MyMatchesPage>
     );
   }
 
+  Future<void> _showRateOrganizerDialog(int matchId) async {
+    int selected = 0;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setS) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text(
+            'Organizatörü Değerlendir',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+          ),
+          content: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: List.generate(5, (i) {
+              final star = i + 1;
+              return GestureDetector(
+                onTap: () => setS(() => selected = star),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: Icon(
+                    star <= selected ? Icons.star : Icons.star_border,
+                    color: star <= selected
+                        ? const Color(0xFFE0A820)
+                        : const Color(0xFFCCCCCC),
+                    size: 36,
+                  ),
+                ),
+              );
+            }),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('İptal',
+                  style: TextStyle(color: Color(0xFF8A8A8A))),
+            ),
+            ElevatedButton(
+              onPressed: selected == 0
+                  ? null
+                  : () async {
+                      Navigator.pop(ctx);
+                      final result =
+                          await AuthService.rateOrganizer(matchId, selected);
+                      if (!mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(result.success
+                              ? 'Değerlendirme kaydedildi!'
+                              : (result.error ?? 'Bir hata oluştu.')),
+                          backgroundColor: result.success
+                              ? const Color(0xFF4A8A3A)
+                              : const Color(0xFFAA3A3A),
+                          behavior: SnackBarBehavior.floating,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10)),
+                        ),
+                      );
+                      if (result.success) _fetchMatches();
+                    },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF4A7A4A),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+              ),
+              child: const Text('Gönder'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildList(List<Map<String, dynamic>> matches, {required bool upcoming}) {
     if (matches.isEmpty) {
       return Center(
@@ -190,19 +264,45 @@ class _MyMatchesPageState extends State<MyMatchesPage>
         padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
         itemCount: matches.length,
         separatorBuilder: (_, _) => const SizedBox(height: 12),
-        itemBuilder: (_, i) => _MatchCard(
-          match: matches[i],
-          formatDate: _formatDate,
-          parseDate: _parseDate,
-          upcoming: upcoming,
-          onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) =>
-                  MatchDetailPage(matchId: matches[i]['matchId'] as int),
-            ),
-          ).then((_) => _fetchMatches()),
-        ),
+        itemBuilder: (_, i) {
+          final m            = matches[i];
+          final isCreator    = m['isCreator'] as bool? ?? false;
+          final isEvaluated  = m['isEvaluated'] as bool? ?? false;
+          final isRated      = m['isRated'] as bool? ?? false;
+          final myAttendance = m['myAttendance'] as String?;
+          final canRate      = !upcoming && !isCreator &&
+                               myAttendance == 'attended' && !isRated;
+          return _MatchCard(
+            match: m,
+            formatDate: _formatDate,
+            parseDate: _parseDate,
+            upcoming: upcoming,
+            onTap: upcoming
+                ? () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => MatchDetailPage(matchId: m['matchId'] as int),
+                      ),
+                    ).then((_) => _fetchMatches())
+                : null,
+            onEvaluate: (!upcoming && isCreator && !isEvaluated)
+                ? () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => EvaluateMatchPage(
+                          matchId: m['matchId'] as int,
+                          fieldName: m['fieldName'] as String,
+                        ),
+                      ),
+                    ).then((evaluated) {
+                      if (evaluated == true) _fetchMatches();
+                    })
+                : null,
+            onRateOrganizer: canRate
+                ? () => _showRateOrganizerDialog(m['matchId'] as int)
+                : null,
+          );
+        },
       ),
     );
   }
@@ -213,14 +313,18 @@ class _MatchCard extends StatelessWidget {
   final String Function(DateTime) formatDate;
   final DateTime Function(Map<String, dynamic>) parseDate;
   final bool upcoming;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
+  final VoidCallback? onEvaluate;
+  final VoidCallback? onRateOrganizer;
 
   const _MatchCard({
     required this.match,
     required this.formatDate,
     required this.parseDate,
     required this.upcoming,
-    required this.onTap,
+    this.onTap,
+    this.onEvaluate,
+    this.onRateOrganizer,
   });
 
   Color _skillColor(String level) {
@@ -246,7 +350,7 @@ class _MatchCard extends StatelessWidget {
     final isFull      = status == 'full';
 
     return GestureDetector(
-      onTap: upcoming ? onTap : null,
+      onTap: onTap,
       child: Container(
         decoration: BoxDecoration(
           color: upcoming ? Colors.white : const Color(0xFFF4F4F4),
@@ -367,6 +471,46 @@ class _MatchCard extends StatelessWidget {
                   ),
               ],
             ),
+            if (onEvaluate != null) ...[
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: onEvaluate,
+                  icon: const Icon(Icons.rate_review_outlined, size: 16),
+                  label: const Text('Maçı Değerlendir'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF4A7A4A),
+                    side: const BorderSide(color: Color(0xFF4A7A4A)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    textStyle: const TextStyle(
+                        fontSize: 13, fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ),
+            ],
+            if (onRateOrganizer != null) ...[
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: onRateOrganizer,
+                  icon: const Icon(Icons.star_outline, size: 16),
+                  label: const Text('Organizatörü Değerlendir'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF3A6A9A),
+                    side: const BorderSide(color: Color(0xFF3A6A9A)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    textStyle: const TextStyle(
+                        fontSize: 13, fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
       ),

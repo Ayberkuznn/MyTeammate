@@ -56,6 +56,36 @@ router.post('/requests/:id/reject', requireAuth, async (req, res) => {
   }
 });
 
+router.get('/:id/participants', requireAuth, async (req, res) => {
+  try {
+    const { status, body } = await matchService.getMatchParticipants(req.user.userId, req.params.id);
+    res.status(status).json(body);
+  } catch (err) {
+    console.error('Get participants error:', err);
+    res.status(500).json({ error: 'Sunucu hatası.' });
+  }
+});
+
+router.post('/:id/evaluate', requireAuth, async (req, res) => {
+  try {
+    const { status, body } = await matchService.evaluateMatch(req.user.userId, req.params.id, req.body.evaluations);
+    res.status(status).json(body);
+  } catch (err) {
+    console.error('Evaluate match error:', err);
+    res.status(500).json({ error: 'Sunucu hatası.' });
+  }
+});
+
+router.post('/:id/rate-organizer', requireAuth, async (req, res) => {
+  try {
+    const { status, body } = await matchService.rateOrganizer(req.user.userId, req.params.id, req.body.star);
+    res.status(status).json(body);
+  } catch (err) {
+    console.error('Rate organizer error:', err);
+    res.status(500).json({ error: 'Sunucu hatası.' });
+  }
+});
+
 router.get('/:id', requireAuth, async (req, res) => {
   try {
     const { status, body } = await matchService.getMatchById(req.params.id);

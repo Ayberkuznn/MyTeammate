@@ -4,6 +4,7 @@ const authRoutes  = require('./routes/auth.routes');
 const userRoutes  = require('./routes/user.routes');
 const fieldRoutes = require('./routes/field.routes');
 const matchRoutes = require('./routes/match.routes');
+const { startScheduler } = require('./scheduler');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -19,7 +20,10 @@ app.use('/api/field', fieldRoutes);
 app.use('/api/match', matchRoutes);
 
 if (require.main === module) {
-  app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+    startScheduler();
+  });
 }
 
 module.exports = app;
