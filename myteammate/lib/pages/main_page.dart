@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import 'profile_page.dart';
 import 'create_match_page.dart';
 import 'match_detail_page.dart';
@@ -184,7 +186,13 @@ class _HomePageState extends State<_HomePage> {
             _buildFilterRow(),
             const SizedBox(height: 12),
             Expanded(
-              child: _viewIndex == 1 ? _buildList() : _buildMapPlaceholder(),
+              child: IndexedStack(
+                index: _viewIndex == 1 ? 0 : 1,
+                children: [
+                  _buildList(),
+                  _buildMapView(),
+                ],
+              ),
             ),
           ],
         ),
@@ -509,18 +517,195 @@ class _HomePageState extends State<_HomePage> {
     );
   }
 
-  Widget _buildMapPlaceholder() {
-    return const Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.map_outlined, size: 64, color: Color(0xFFAAAAAA)),
-          SizedBox(height: 12),
-          Text(
-            'Harita görünümü yakında',
-            style: TextStyle(fontSize: 16, color: Color(0xFF8A8A8A)),
-          ),
-        ],
+  Widget _buildMapView() {
+    final withCoords = _matches
+        .where((m) => m['lat'] != null && m['lng'] != null)
+        .toList();
+
+    if (_matchesLoading) {
+      return const Center(
+          child: CircularProgressIndicator(color: Color(0xFF4A7A4A)));
+    }
+
+    if (withCoords.isEmpty) {
+      return const Center(
+        child: Text(
+          'Haritada gösterilecek maç bulunamadı.',
+          style: TextStyle(color: Color(0xFF8A8A8A), fontSize: 15),
+        ),
+      );
+    }
+
+    // Merkez: maçların ortalama koordinatı
+    final avgLat =
+        withCoords.map((m) => m['lat'] as double).reduce((a, b) => a + b) /
+            withCoords.length;
+    final avgLng =
+        withCoords.map((m) => m['lng'] as double).reduce((a, b) => a + b) /
+            withCoords.length;
+
+    return FlutterMap(
+      options: MapOptions(
+        initialCenter: LatLng(avgLat, avgLng),
+        initialZoom: 13,
+      ),
+      children: [
+        TileLayer(
+          urlTemplate:
+              'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
+          subdomains: const ['a', 'b', 'c', 'd'],
+          userAgentPackageName: 'com.myteammate.app',
+          maxNativeZoom: 19,
+          keepBuffer: 4,
+        ),
+        MarkerLayer(
+          markers: withCoords.map((m) {
+            final lat = m['lat'] as double;
+            final lng = m['lng'] as double;
+            return Marker(
+              point: LatLng(lat, lng),
+              width: 44,
+              height: 44,
+              child: GestureDetector(
+                onTap: () => _showMatchBottomSheet(m),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF4A7A4A),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 2.5),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.25),
+                        blurRadius: 6,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.sports_soccer,
+                    color: Colors.white,
+                    size: 22,
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+
+  void _showMatchBottomSheet(Map<String, dynamic> match) {
+    final date    = _parseMatchDate(match);
+    final current = match['filledPlayers'] as int;
+    final total   = match['requiredPlayers'] as int;
+    final level   = match['skillLevel'] as String;
+    final isFull  = current >= total;
+
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => Padding(
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFDDDDDD),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              match['fieldName'] as String,
+              style: const TextStyle(
+                  fontSize: 18, fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              _formatDate(date),
+              style: const TextStyle(
+                  fontSize: 13, color: Color(0xFF7A7A7A)),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '${match['district']}, ${match['city']}',
+              style: const TextStyle(
+                  fontSize: 12, color: Color(0xFFAAAAAA)),
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                const Icon(Icons.group,
+                    size: 18, color: Color(0xFF3A3A3A)),
+                const SizedBox(width: 6),
+                Text(
+                  '$current/$total Oyuncu',
+                  style: const TextStyle(
+                      fontSize: 14, fontWeight: FontWeight.w600),
+                ),
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: _skillColor(level),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    level,
+                    style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: isFull
+                    ? null
+                    : () {
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => MatchDetailPage(
+                                matchId: match['matchId'] as int),
+                          ),
+                        ).then((_) => _fetchMatches());
+                      },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF4A7A4A),
+                  foregroundColor: Colors.white,
+                  disabledBackgroundColor: const Color(0xFFAAAAAA),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  elevation: 0,
+                ),
+                child: Text(
+                  isFull ? 'DOLU' : 'KATIL',
+                  style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

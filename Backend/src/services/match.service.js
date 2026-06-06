@@ -132,7 +132,9 @@ async function getMatches({ city, district } = {}) {
        (SELECT COUNT(*) FROM match_participants mp WHERE mp.match_id = m.match_id)::int AS filled_players,
        m.min_point_required,
        m.price_per_person,
-       m.status
+       m.status,
+       f."locationX"                   AS lat,
+       f."locationY"                   AS lng
      FROM "Match" m
      JOIN "Field" f ON m.field_id = f.field_id
      WHERE ${where}
@@ -155,6 +157,8 @@ async function getMatches({ city, district } = {}) {
       filledPlayers:   r.filled_players,
       skillLevel:      skillMap[r.min_point_required] ?? 'Orta Seviye',
       pricePerPerson:  Number(r.price_per_person),
+      lat:             r.lat != null ? Number(r.lat) : null,
+      lng:             r.lng != null ? Number(r.lng) : null,
     })),
   };
 }
