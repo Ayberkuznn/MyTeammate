@@ -287,6 +287,29 @@ class AuthService {
     return AuthResult(success: false, error: body['error'] as String? ?? 'Bir hata oluştu.');
   }
 
+  static Future<AuthResult> changePassword(String currentPassword, String newPassword) async {
+    final token = await _storage.read(key: 'access_token');
+    if (token == null) return const AuthResult(success: false, error: 'Oturum bulunamadı.');
+
+    final response = await http.post(
+      Uri.parse('$_baseUrl/api/auth/change-password'),
+      headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
+      body: jsonEncode({'currentPassword': currentPassword, 'newPassword': newPassword}),
+    );
+
+    if (response.statusCode == 200) return const AuthResult(success: true);
+    if (response.statusCode == 401) {
+      return const AuthResult(success: false, error: 'Mevcut şifre hatalı.');
+    }
+    if (response.statusCode == 400) {
+      return const AuthResult(
+        success: false,
+        error: 'Yeni şifre en az 8 karakter, büyük/küçük harf ve rakam içermelidir.',
+      );
+    }
+    return const AuthResult(success: false, error: 'Bir hata oluştu. Lütfen tekrar deneyin.');
+  }
+
   static Future<AuthResult> rateOrganizer(int matchId, int star) async {
     final token = await _storage.read(key: 'access_token');
     if (token == null) return const AuthResult(success: false, error: 'Oturum bulunamadı.');

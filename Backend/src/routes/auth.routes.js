@@ -1,5 +1,6 @@
 const { Router } = require('express');
 const authService = require('../services/auth.service');
+const { requireAuth } = require('../middleware/auth.middleware');
 
 const router = Router();
 
@@ -30,6 +31,16 @@ router.post('/login', async (req, res) => {
   } catch (err) {
     console.error('Login error:', err);
     res.status(500).json({ error: 'Sunucu hatası. Lütfen tekrar deneyin.' });
+  }
+});
+
+router.post('/change-password', requireAuth, async (req, res) => {
+  try {
+    const { status, body } = await authService.changePassword(req.user.userId, req.body);
+    res.status(status).json(body);
+  } catch (err) {
+    console.error('Change password error:', err);
+    res.status(500).json({ error: 'Sunucu hatası.' });
   }
 });
 

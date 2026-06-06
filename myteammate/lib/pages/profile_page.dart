@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
+import 'change_password_page.dart';
 import 'edit_profile_page.dart';
 import 'login_page.dart';
 
@@ -204,6 +205,31 @@ class _ProfilePageState extends State<ProfilePage> {
           ),
 
           const SizedBox(height: 24),
+
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            child: SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const ChangePasswordPage()),
+                ),
+                icon: const Icon(Icons.lock_outline, size: 18),
+                label: const Text('Şifre Değiştir'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFF3A5A8A),
+                  side: const BorderSide(color: Color(0xFF3A5A8A)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 12),
 
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 32),

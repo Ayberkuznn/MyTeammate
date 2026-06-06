@@ -158,4 +158,36 @@ async function login({ Email, Password }) {
   };
 }
 
-module.exports = { register, verifyEmail, login };
+async function changePassword(userId, { currentPassword, newPassword }) {
+  if (!currentPassword || !newPassword) {
+    return { status: 400, body: { error: 'Mevcut şifre ve yeni şifre zorunludur.' } };
+  }
+
+  const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
+  if (!passwordRegex.test(newPassword)) {
+    return {
+      status: 400,
+      body: { error: 'Yeni şifre en az 8 karakter, bir büyük harf, bir küçük harf ve bir rakam içermelidir.' },
+    };
+  }
+
+  const result = await pool.query(
+    'SELECT "Password" FROM "User" WHERE user_id = $1 LIMIT 1',
+    [userId]
+  );
+  if (result.rows.length === 0) {
+    return { status: 404, body: { error: 'Kullanıcı bulunamadı.' } };
+  }
+
+  const match = await bcrypt.compare(currentPassword, result.rows[0].Password);
+  if (!match) {
+    return { status: 401, body: { error: 'Mevcut şifre hatalı.' } };
+  }
+
+  const hashed = await bcrypt.hash(newPassword, 12);
+  await pool.query('UPDATE "User" SET "Password" = $1 WHERE user_id = $2', [hashed, userId]);
+
+  return { status: 200, body: { message: 'Şifre başarıyla değiştirildi.' } };
+}
+
+module.exports = { register, verifyEmail, login, changePassword };
