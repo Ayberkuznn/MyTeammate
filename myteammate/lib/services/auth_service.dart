@@ -287,6 +287,54 @@ class AuthService {
     return AuthResult(success: false, error: body['error'] as String? ?? 'Bir hata oluştu.');
   }
 
+  static Future<AuthResult> forgotPassword(String email) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/api/auth/forgot-password'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'email': email}),
+      );
+      if (response.statusCode == 200) return const AuthResult(success: true);
+      if (response.statusCode == 404) {
+        return const AuthResult(success: false, error: 'Mail adresi hatalı.');
+      }
+      return const AuthResult(success: false, error: 'Bir hata oluştu. Lütfen tekrar deneyin.');
+    } catch (_) {
+      return const AuthResult(success: false, error: 'Sunucuya bağlanılamadı.');
+    }
+  }
+
+  static Future<AuthResult> verifyResetCode(String email, String code) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/api/auth/verify-reset-code'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'email': email, 'code': code}),
+      );
+      if (response.statusCode == 200) return const AuthResult(success: true);
+      return const AuthResult(success: false, error: 'Kod hatalı veya süresi dolmuş.');
+    } catch (_) {
+      return const AuthResult(success: false, error: 'Sunucuya bağlanılamadı.');
+    }
+  }
+
+  static Future<AuthResult> resetPassword(String email, String code, String newPassword) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/api/auth/reset-password'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'email': email, 'code': code, 'newPassword': newPassword}),
+      );
+      if (response.statusCode == 200) return const AuthResult(success: true);
+      if (response.statusCode == 400) {
+        return const AuthResult(success: false, error: 'Kod hatalı veya süresi dolmuş.');
+      }
+      return const AuthResult(success: false, error: 'Bir hata oluştu. Lütfen tekrar deneyin.');
+    } catch (_) {
+      return const AuthResult(success: false, error: 'Sunucuya bağlanılamadı.');
+    }
+  }
+
   static Future<AuthResult> changePassword(String currentPassword, String newPassword) async {
     final token = await _storage.read(key: 'access_token');
     if (token == null) return const AuthResult(success: false, error: 'Oturum bulunamadı.');

@@ -1,6 +1,6 @@
 const bcrypt = require('bcrypt');
 const pool = require('../config/db');
-const { sendOtpEmail, generateOtp } = require('../utils/mailer');
+const { sendOtpEmail, sendPasswordResetEmail, generateOtp } = require('../utils/mailer');
 const { generateTokens } = require('../utils/jwt');
 
 const ALLOWED_POSITIONS   = ['Kaleci', 'Defans', 'Orta Saha', 'Forvet'];
@@ -190,4 +190,96 @@ async function changePassword(userId, { currentPassword, newPassword }) {
   return { status: 200, body: { message: 'Şifre başarıyla değiştirildi.' } };
 }
 
-module.exports = { register, verifyEmail, login, changePassword };
+async function verifyResetCode({ email, code }) {
+  if (!email?.trim() || !code?.trim()) {
+    return { status: 400, body: { error: 'E-posta ve kod zorunludur.' } };
+  }
+
+  const userResult = await pool.query(
+    'SELECT user_id FROM "User" WHERE "Email" = $1 LIMIT 1',
+    [email.trim().toLowerCase()]
+  );
+  if (userResult.rows.length === 0) {
+    return { status: 404, body: { error: 'Kullanıcı bulunamadı.' } };
+  }
+
+  const userId = userResult.rows[0].user_id;
+  const validation = await pool.query(
+    `SELECT 1 FROM "Validation"
+     WHERE user_id = $1 AND code = $2 AND is_used = false AND expires_at > NOW()
+     LIMIT 1`,
+    [userId, code.trim()]
+  );
+  if (validation.rows.length === 0) {
+    return { status: 400, body: { error: 'Kod hatalı veya süresi dolmuş.' } };
+  }
+
+  return { status: 200, body: { message: 'Kod doğrulandı.' } };
+}
+
+async function forgotPassword({ email }) {
+  if (!email?.trim()) {
+    return { status: 400, body: { error: 'E-posta zorunludur.' } };
+  }
+
+  const result = await pool.query(
+    'SELECT user_id FROM "User" WHERE "Email" = $1 LIMIT 1',
+    [email.trim().toLowerCase()]
+  );
+  if (result.rows.length === 0) {
+    return { status: 404, body: { error: 'Mail adresi hatalı.' } };
+  }
+
+  const userId = result.rows[0].user_id;
+  const otp = generateOtp();
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+  await pool.query('DELETE FROM "Validation" WHERE user_id = $1', [userId]);
+  await pool.query(
+    'INSERT INTO "Validation" (user_id, code, expires_at, is_used) VALUES ($1, $2, $3, false)',
+    [userId, otp, expiresAt]
+  );
+
+  await sendPasswordResetEmail(email.trim().toLowerCase(), otp);
+
+  return { status: 200, body: { message: 'Şifre sıfırlama kodu gönderildi.' } };
+}
+
+async function resetPassword({ email, code, newPassword }) {
+  if (!email?.trim() || !code?.trim() || !newPassword) {
+    return { status: 400, body: { error: 'Tüm alanlar zorunludur.' } };
+  }
+
+  const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
+  if (!passwordRegex.test(newPassword)) {
+    return { status: 400, body: { error: 'Şifre kurallarına uymuyor.' } };
+  }
+
+  const userResult = await pool.query(
+    'SELECT user_id FROM "User" WHERE "Email" = $1 LIMIT 1',
+    [email.trim().toLowerCase()]
+  );
+  if (userResult.rows.length === 0) {
+    return { status: 404, body: { error: 'Kullanıcı bulunamadı.' } };
+  }
+
+  const userId = userResult.rows[0].user_id;
+
+  const validation = await pool.query(
+    `SELECT 1 FROM "Validation"
+     WHERE user_id = $1 AND code = $2 AND is_used = false AND expires_at > NOW()
+     LIMIT 1`,
+    [userId, code.trim()]
+  );
+  if (validation.rows.length === 0) {
+    return { status: 400, body: { error: 'Kod hatalı veya süresi dolmuş.' } };
+  }
+
+  const hashed = await bcrypt.hash(newPassword, 12);
+  await pool.query('UPDATE "User" SET "Password" = $1 WHERE user_id = $2', [hashed, userId]);
+  await pool.query('UPDATE "Validation" SET is_used = true WHERE user_id = $1', [userId]);
+
+  return { status: 200, body: { message: 'Şifre başarıyla sıfırlandı.' } };
+}
+
+module.exports = { register, verifyEmail, login, changePassword, forgotPassword, verifyResetCode, resetPassword };

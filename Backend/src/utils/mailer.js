@@ -24,4 +24,14 @@ function generateOtp() {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
-module.exports = { sendOtpEmail, generateOtp };
+async function sendPasswordResetEmail(to, code) {
+  await transporter.sendMail({
+    from: `"Takım Arkadaşım" <${process.env.SMTP_USER}>`,
+    to,
+    subject: 'Şifre Sıfırlama Kodunuz',
+    text: `Şifre sıfırlama kodunuz: ${code}\n\nBu kod 10 dakika geçerlidir.`,
+    html: `<p>Şifre sıfırlama kodunuz: <strong style="font-size:24px">${code}</strong></p><p>Bu kod 10 dakika geçerlidir.</p>`,
+  });
+}
+
+module.exports = { sendOtpEmail, sendPasswordResetEmail, generateOtp };

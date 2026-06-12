@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'register_page.dart';
+import 'forgot_password_page.dart';
 import 'main_page.dart';
 import '../services/auth_service.dart';
 
@@ -129,7 +130,10 @@ class _LoginPageState extends State<LoginPage> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     GestureDetector(
-                      onTap: () {},
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const ForgotPasswordPage()),
+                      ),
                       child: const Text(
                         'Şifremi Unuttum',
                         style: TextStyle(
