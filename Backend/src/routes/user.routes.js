@@ -34,4 +34,14 @@ router.put('/fcm-token', requireAuth, async (req, res) => {
   }
 });
 
+router.post('/logout', requireAuth, async (req, res) => {
+  try {
+    const { status, body } = await userService.clearFcmToken(req.user.userId);
+    res.status(status).json(body);
+  } catch (err) {
+    console.error('Logout error:', err);
+    res.status(500).json({ error: 'Sunucu hatası.' });
+  }
+});
+
 module.exports = router;

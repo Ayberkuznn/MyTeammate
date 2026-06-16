@@ -1,6 +1,7 @@
 const { Router } = require('express');
 const authService = require('../services/auth.service');
 const { requireAuth } = require('../middleware/auth.middleware');
+const { verifyRefreshToken, generateTokens } = require('../utils/jwt');
 
 const router = Router();
 
@@ -71,6 +72,22 @@ router.post('/change-password', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('Change password error:', err);
     res.status(500).json({ error: 'Sunucu hatası.' });
+  }
+});
+
+router.post('/refresh', (req, res) => {
+  const { refreshToken } = req.body;
+  if (!refreshToken) return res.status(400).json({ error: 'Refresh token gerekli.' });
+
+  try {
+    const payload = verifyRefreshToken(refreshToken);
+    const { accessToken, refreshToken: newRefreshToken } = generateTokens({
+      userId: payload.userId,
+      email: payload.email,
+    });
+    res.json({ accessToken, refreshToken: newRefreshToken });
+  } catch {
+    res.status(401).json({ error: 'Geçersiz veya süresi dolmuş refresh token.' });
   }
 });
 

@@ -13,4 +13,8 @@ function verifyAccessToken(token) {
   return jwt.verify(token, ACCESS_SECRET);
 }
 
-module.exports = { generateTokens, verifyAccessToken };
+function verifyRefreshToken(token) {
+  return jwt.verify(token, REFRESH_SECRET);
+}
+
+module.exports = { generateTokens, verifyAccessToken, verifyRefreshToken };

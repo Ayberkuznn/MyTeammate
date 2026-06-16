@@ -15,6 +15,56 @@ class AuthService {
       kIsWeb ? 'http://localhost:3000' : 'http://192.168.1.149:3000';
   static const _storage = FlutterSecureStorage();
 
+  static Map<String, dynamic> _decodeJwt(String token) {
+    try {
+      final parts = token.split('.');
+      if (parts.length != 3) return {};
+      var payload = parts[1];
+      while (payload.length % 4 != 0) {
+        payload += '=';
+      }
+      return jsonDecode(utf8.decode(base64Url.decode(payload))) as Map<String, dynamic>;
+    } catch (_) {
+      return {};
+    }
+  }
+
+  static Future<bool> _tryRefresh() async {
+    final refreshToken = await _storage.read(key: 'refresh_token');
+    if (refreshToken == null) return false;
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/api/auth/refresh'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'refreshToken': refreshToken}),
+      );
+      if (response.statusCode == 200) {
+        final body = jsonDecode(response.body) as Map<String, dynamic>;
+        await _storage.write(key: 'access_token', value: body['accessToken'] as String);
+        await _storage.write(key: 'refresh_token', value: body['refreshToken'] as String);
+        return true;
+      }
+    } catch (_) {}
+    return false;
+  }
+
+  // Geçerli access token'ı döner; 30 saniyeden az kaldıysa otomatik yeniler.
+  static Future<String?> _getToken() async {
+    final token = await _storage.read(key: 'access_token');
+    if (token == null) return null;
+    final payload = _decodeJwt(token);
+    final exp = payload['exp'] as int?;
+    if (exp != null) {
+      final expiry = DateTime.fromMillisecondsSinceEpoch(exp * 1000);
+      if (DateTime.now().isAfter(expiry.subtract(const Duration(seconds: 30)))) {
+        final refreshed = await _tryRefresh();
+        if (!refreshed) return null;
+        return _storage.read(key: 'access_token');
+      }
+    }
+    return token;
+  }
+
   static Future<AuthResult> login(String email, String password) async {
     final response = await http.post(
       Uri.parse('$_baseUrl/api/auth/login'),
@@ -58,7 +108,7 @@ class AuthService {
   }
 
   static Future<Map<String, dynamic>?> getProfile() async {
-    final token = await _storage.read(key: 'access_token');
+    final token = await _getToken();
     if (token == null) return null;
 
     final response = await http.get(
@@ -76,7 +126,7 @@ class AuthService {
   }
 
   static Future<AuthResult> updateProfile(Map<String, dynamic> data) async {
-    final token = await _storage.read(key: 'access_token');
+    final token = await _getToken();
     if (token == null) return const AuthResult(success: false, error: 'Oturum bulunamadı.');
 
     final response = await http.put(
@@ -101,7 +151,7 @@ class AuthService {
   }
 
   static Future<AuthResult> createMatch(Map<String, dynamic> data) async {
-    final token = await _storage.read(key: 'access_token');
+    final token = await _getToken();
     if (token == null) return const AuthResult(success: false, error: 'Oturum bulunamadı.');
 
     final response = await http.post(
@@ -129,7 +179,7 @@ class AuthService {
     required String city,
     required String district,
   }) async {
-    final token = await _storage.read(key: 'access_token');
+    final token = await _getToken();
     if (token == null) return [];
 
     final uri = Uri.parse('$_baseUrl/api/field').replace(
@@ -166,7 +216,7 @@ class AuthService {
   }
 
   static Future<AuthResult> joinMatch(int matchId, String position) async {
-    final token = await _storage.read(key: 'access_token');
+    final token = await _getToken();
     if (token == null) return const AuthResult(success: false, error: 'Oturum bulunamadı.');
 
     final response = await http.post(
@@ -184,7 +234,7 @@ class AuthService {
   }
 
   static Future<List<Map<String, dynamic>>?> getMatchRequests() async {
-    final token = await _storage.read(key: 'access_token');
+    final token = await _getToken();
     if (token == null) return null;
 
     final response = await http.get(
@@ -203,7 +253,7 @@ class AuthService {
   }
 
   static Future<AuthResult> acceptRequest(int requestId) async {
-    final token = await _storage.read(key: 'access_token');
+    final token = await _getToken();
     if (token == null) return const AuthResult(success: false, error: 'Oturum bulunamadı.');
 
     final response = await http.post(
@@ -220,7 +270,7 @@ class AuthService {
   }
 
   static Future<AuthResult> rejectRequest(int requestId) async {
-    final token = await _storage.read(key: 'access_token');
+    final token = await _getToken();
     if (token == null) return const AuthResult(success: false, error: 'Oturum bulunamadı.');
 
     final response = await http.post(
@@ -237,7 +287,7 @@ class AuthService {
   }
 
   static Future<List<Map<String, dynamic>>?> getMyMatches() async {
-    final token = await _storage.read(key: 'access_token');
+    final token = await _getToken();
     if (token == null) return null;
 
     final response = await http.get(
@@ -256,7 +306,7 @@ class AuthService {
   }
 
   static Future<List<Map<String, dynamic>>?> getMatchParticipants(int matchId) async {
-    final token = await _storage.read(key: 'access_token');
+    final token = await _getToken();
     if (token == null) return null;
 
     final response = await http.get(
@@ -273,7 +323,7 @@ class AuthService {
 
   static Future<AuthResult> evaluateMatch(
       int matchId, List<Map<String, dynamic>> evaluations) async {
-    final token = await _storage.read(key: 'access_token');
+    final token = await _getToken();
     if (token == null) return const AuthResult(success: false, error: 'Oturum bulunamadı.');
 
     final response = await http.post(
@@ -336,7 +386,7 @@ class AuthService {
   }
 
   static Future<AuthResult> changePassword(String currentPassword, String newPassword) async {
-    final token = await _storage.read(key: 'access_token');
+    final token = await _getToken();
     if (token == null) return const AuthResult(success: false, error: 'Oturum bulunamadı.');
 
     final response = await http.post(
@@ -359,7 +409,7 @@ class AuthService {
   }
 
   static Future<AuthResult> rateOrganizer(int matchId, int star) async {
-    final token = await _storage.read(key: 'access_token');
+    final token = await _getToken();
     if (token == null) return const AuthResult(success: false, error: 'Oturum bulunamadı.');
 
     final response = await http.post(
@@ -374,7 +424,7 @@ class AuthService {
   }
 
   static Future<Map<String, dynamic>?> getMatchDetail(int matchId) async {
-    final token = await _storage.read(key: 'access_token');
+    final token = await _getToken();
     if (token == null) return null;
 
     final response = await http.get(
@@ -392,7 +442,7 @@ class AuthService {
   }
 
   static Future<void> updateFcmToken(String fcmToken) async {
-    final token = await _storage.read(key: 'access_token');
+    final token = await _getToken();
     if (token == null) return;
 
     try {
@@ -407,6 +457,15 @@ class AuthService {
   }
 
   static Future<void> logout() async {
+    final token = await _getToken();
+    if (token != null) {
+      try {
+        await http.post(
+          Uri.parse('$_baseUrl/api/user/logout'),
+          headers: {'Authorization': 'Bearer $token'},
+        );
+      } catch (_) {}
+    }
     await _storage.delete(key: 'access_token');
     await _storage.delete(key: 'refresh_token');
     await _storage.delete(key: 'user_email');
@@ -419,7 +478,7 @@ class AuthService {
     String? city,
     String? district,
   }) async {
-    final token = await _storage.read(key: 'access_token');
+    final token = await _getToken();
     if (token == null) return (matches: <Map<String, dynamic>>[], error: 'Oturum bulunamadı.');
 
     final queryParams = <String, String>{};

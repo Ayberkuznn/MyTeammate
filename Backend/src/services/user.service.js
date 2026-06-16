@@ -63,9 +63,17 @@ async function updateFcmToken(userId, { fcmToken }) {
     return { status: 400, body: { error: 'fcmToken zorunludur.' } };
   }
 
-  await pool.query('UPDATE "User" SET fcm_token = $1 WHERE user_id = $2', [fcmToken.trim(), userId]);
+  const token = fcmToken.trim();
+  // Aynı token başka bir kullanıcıda kayıtlıysa temizle
+  await pool.query('UPDATE "User" SET fcm_token = NULL WHERE fcm_token = $1 AND user_id != $2', [token, userId]);
+  await pool.query('UPDATE "User" SET fcm_token = $1 WHERE user_id = $2', [token, userId]);
 
   return { status: 200, body: { message: 'Bildirim token\'ı kaydedildi.' } };
 }
 
-module.exports = { getProfile, updateProfile, updateFcmToken };
+async function clearFcmToken(userId) {
+  await pool.query('UPDATE "User" SET fcm_token = NULL WHERE user_id = $1', [userId]);
+  return { status: 200, body: { message: 'Oturum kapatıldı.' } };
+}
+
+module.exports = { getProfile, updateProfile, updateFcmToken, clearFcmToken };
