@@ -12,7 +12,7 @@ class AuthResult {
 
 class AuthService {
   static final String _baseUrl =
-      kIsWeb ? 'http://localhost:3000' : 'http://10.0.2.2:3000';
+      kIsWeb ? 'http://localhost:3000' : 'http://192.168.1.149:3000';
   static const _storage = FlutterSecureStorage();
 
   static Future<AuthResult> login(String email, String password) async {
@@ -389,6 +389,21 @@ class AuthService {
       return jsonDecode(response.body) as Map<String, dynamic>;
     }
     return null;
+  }
+
+  static Future<void> updateFcmToken(String fcmToken) async {
+    final token = await _storage.read(key: 'access_token');
+    if (token == null) return;
+
+    try {
+      await http.put(
+        Uri.parse('$_baseUrl/api/user/fcm-token'),
+        headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
+        body: jsonEncode({'fcmToken': fcmToken}),
+      );
+    } catch (_) {
+      // Sessizce yoksay, bir sonraki açılışta veya token yenilenince tekrar denenecek.
+    }
   }
 
   static Future<void> logout() async {

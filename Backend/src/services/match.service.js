@@ -1,4 +1,5 @@
 const pool = require('../config/db');
+const { sendPushToUser } = require('../utils/push');
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_RE = /^\d{2}:\d{2}$/;
@@ -248,7 +249,7 @@ async function joinMatch(userId, matchId, position) {
     await client.query('BEGIN');
 
     const matchRow = await client.query(
-      `SELECT status, required_players FROM "Match" WHERE match_id = $1`,
+      `SELECT status, required_players, "Creator_id" AS creator_id FROM "Match" WHERE match_id = $1`,
       [id],
     );
     if (matchRow.rows.length === 0) {
@@ -256,7 +257,7 @@ async function joinMatch(userId, matchId, position) {
       return { status: 404, body: { error: 'Maç bulunamadı.' } };
     }
 
-    const { status, required_players } = matchRow.rows[0];
+    const { status, required_players, creator_id } = matchRow.rows[0];
     if (status !== 'active') {
       await client.query('ROLLBACK');
       return { status: 400, body: { error: 'Bu maça katılım mümkün değil.' } };
@@ -301,6 +302,14 @@ async function joinMatch(userId, matchId, position) {
     );
 
     await client.query('COMMIT');
+
+    sendPushToUser(
+      creator_id,
+      'Yeni katılım isteği',
+      'Maçınıza yeni bir katılım isteği gönderildi.',
+      { type: 'match_request', matchId: String(id) },
+    );
+
     return { status: 200, body: { message: 'Katılım isteği başarıyla gönderildi.' } };
   } catch (err) {
     await client.query('ROLLBACK');
@@ -417,6 +426,14 @@ async function acceptRequest(userId, requestId) {
     }
 
     await client.query('COMMIT');
+
+    sendPushToUser(
+      req.user_id,
+      'Katılım isteğiniz kabul edildi',
+      'Bir maça katılım isteğiniz organizatör tarafından kabul edildi.',
+      { type: 'request_accepted', matchId: String(req.match_id) },
+    );
+
     return { status: 200, body: { message: 'Katılım isteği kabul edildi.' } };
   } catch (err) {
     await client.query('ROLLBACK');
@@ -432,7 +449,7 @@ async function rejectRequest(userId, requestId) {
     return { status: 400, body: { error: 'Geçersiz istek ID.' } };
 
   const reqRow = await pool.query(
-    `SELECT pr.log_id, pr.status, m."Creator_id"
+    `SELECT pr.log_id, pr.status, pr.user_id, pr.match_id, m."Creator_id"
      FROM "Position_request" pr
      JOIN "Match" m ON pr.match_id = m.match_id
      WHERE pr.log_id = $1`,
@@ -451,6 +468,14 @@ async function rejectRequest(userId, requestId) {
     `UPDATE "Position_request" SET status = 2, response_at = NOW() WHERE log_id = $1`,
     [id],
   );
+
+  sendPushToUser(
+    req.user_id,
+    'Katılım isteğiniz reddedildi',
+    'Bir maça katılım isteğiniz organizatör tarafından reddedildi.',
+    { type: 'request_rejected', matchId: String(req.match_id) },
+  );
+
   return { status: 200, body: { message: 'Katılım isteği reddedildi.' } };
 }
 

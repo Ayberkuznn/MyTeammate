@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'pages/login_page.dart';
 import 'pages/main_page.dart';
+import 'services/push_notification_service.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp();
   runApp(const MyApp());
 }
 
@@ -41,6 +45,9 @@ class _AuthGateState extends State<AuthGate> {
 
   Future<void> _checkToken() async {
     final token = await _storage.read(key: 'access_token');
+    if (token != null) {
+      PushNotificationService.initialize();
+    }
     if (!mounted) return;
     Navigator.pushReplacement(
       context,

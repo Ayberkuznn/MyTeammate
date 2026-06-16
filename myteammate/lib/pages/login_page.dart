@@ -3,6 +3,7 @@ import 'register_page.dart';
 import 'forgot_password_page.dart';
 import 'main_page.dart';
 import '../services/auth_service.dart';
+import '../services/push_notification_service.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -42,6 +43,7 @@ class _LoginPageState extends State<LoginPage> {
       if (!mounted) return;
 
       if (result.success) {
+        PushNotificationService.initialize();
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (context) => const MainPage()),

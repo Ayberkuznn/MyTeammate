@@ -24,4 +24,14 @@ router.put('/profile', requireAuth, async (req, res) => {
   }
 });
 
+router.put('/fcm-token', requireAuth, async (req, res) => {
+  try {
+    const { status, body } = await userService.updateFcmToken(req.user.userId, req.body);
+    res.status(status).json(body);
+  } catch (err) {
+    console.error('Update FCM token error:', err);
+    res.status(500).json({ error: 'Sunucu hatası.' });
+  }
+});
+
 module.exports = router;

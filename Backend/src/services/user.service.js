@@ -58,4 +58,14 @@ async function updateProfile(userId, { City, District, Position, Foot, Skill_lev
   return { status: 200, body: { message: 'Profil güncellendi.' } };
 }
 
-module.exports = { getProfile, updateProfile };
+async function updateFcmToken(userId, { fcmToken }) {
+  if (!fcmToken?.trim()) {
+    return { status: 400, body: { error: 'fcmToken zorunludur.' } };
+  }
+
+  await pool.query('UPDATE "User" SET fcm_token = $1 WHERE user_id = $2', [fcmToken.trim(), userId]);
+
+  return { status: 200, body: { message: 'Bildirim token\'ı kaydedildi.' } };
+}
+
+module.exports = { getProfile, updateProfile, updateFcmToken };
